@@ -13,8 +13,9 @@ Estimate the likelihood that text was AI-generated, using explainable stylometri
 | `filePath` | string | one of `text`/`filePath` | Local path to a file containing the text to analyze. |
 | `reportPath` | string | no | If set, write the report to this local file instead of returning it inline. |
 | `type` | `"creative"` \| `"strategic"` | no | Ruleset to apply — `creative` for novels/creative writing, `strategic` for business documents, presentations, or marketing materials. Omit for a genre-agnostic default. |
+| `ignoreMd` | boolean | no | If true, strips literal `*`, `_`, and `#` characters before analysis, so legitimate use of those characters (e.g. chapter headers, emphasis) isn't flagged as an AI markdown artifact. `-` bullet lines are unaffected. |
 
-**Output**: overall 0-100 AI-likelihood score, a verdict (`likely-human` / `uncertain` / `likely-ai-generated`), the ruleset used, and a per-signal breakdown (score, weight, explanation).
+**Output**: overall 0-100 AI-likelihood score, a verdict (`likely-human` / `uncertain` / `likely-ai-generated`), the ruleset used, whether markdown was ignored, and a per-signal breakdown (score, weight, explanation).
 
 **Signals** (see `src/lib/detectAiUsage.ts`): sentence-length burstiness, lexical diversity (rolling type-token ratio), AI stock-phrase frequency, readability uniformity across paragraphs, markdown-in-prose artifacts, em dash overuse. Each is an isolated function — add a new signal by adding one function and one entry in the `detectors` array.
 
@@ -27,9 +28,9 @@ Estimate the likelihood that text was AI-generated, using explainable stylometri
 
 Get actionable recommendations for making AI-leaning text read more naturally human. Reuses `detect_ai_usage`'s signals; does not rewrite text itself.
 
-**Input**: same shape as `detect_ai_usage` (`text` / `filePath`, plus optional `reportPath` and `type`). If you called `detect_ai_usage` with a `type`, pass the same `type` to `humanize_text` for consistent recommendations.
+**Input**: same shape as `detect_ai_usage` (`text` / `filePath`, plus optional `reportPath`, `type`, and `ignoreMd`). If you called `detect_ai_usage` with a `type` (and/or `ignoreMd`), pass the same values to `humanize_text` for consistent recommendations.
 
-**Output**: current AI-likelihood score, the ruleset used, plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, uniform readability across paragraphs, markdown left in prose, overused em dashes, excessive hedging). See `src/lib/humanizeText.ts`.
+**Output**: current AI-likelihood score, the ruleset used, whether markdown was ignored, plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, uniform readability across paragraphs, markdown left in prose, overused em dashes, excessive hedging). See `src/lib/humanizeText.ts`.
 
 **Rulesets**: `type` selects a `HUMANIZE_PROFILE` in `src/lib/humanizeText.ts` mirroring the detector's intent — e.g. `strategic` skips the markdown-in-prose recommendation entirely (bullets are expected in business docs) and requires less sentence-length variance before flagging uniformity; `creative` tolerates more em dashes and readability drift before flagging.
 
@@ -49,6 +50,7 @@ Return detailed usage documentation for a tool, kept separate from the short `de
 - [x] `humanize_text` — heuristic recommendations implemented; open for new recommendation categories.
 - [x] `get_context` — implemented.
 - [x] `type` ruleset option (`creative` / `strategic`) on both `detect_ai_usage` and `humanize_text`.
-- [x] Automated tests for the `detect_ai_usage` heuristics, `humanize_text` recommendations, and the `type` rulesets (`src/lib/*.test.ts`, run via `npm test`).
+- [x] `ignoreMd` option on both tools to exclude `*`/`_`/`#` markup from analysis.
+- [x] Automated tests for the `detect_ai_usage` heuristics, `humanize_text` recommendations, the `type` rulesets, and `ignoreMd` (`src/lib/*.test.ts`, run via `npm test`).
 - [x] Repo published to GitHub ([dmongrel/human-vs-ai-mcp-server](https://github.com/dmongrel/human-vs-ai-mcp-server)); npm publish still pending (see CLAUDE.md Conventions).
 - [ ] Additional detectors backed by a local/offline model (no external API calls planned — see README).

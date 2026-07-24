@@ -142,6 +142,34 @@ test("formatDetectionReport includes the ruleset used", () => {
   assert.match(formatted, /Ruleset: creative/);
 });
 
+test("ignoreMd strips '*', '_', and '#' before analysis, neutralizing headers and bold runs", () => {
+  const markdownText = Array(10).fill("## A Heading\n\n**Bold claim** about the ordinary topic here today.").join("\n\n");
+  const withMarkdown = detectAiUsage(markdownText);
+  const ignored = detectAiUsage(markdownText, undefined, true);
+  const markdownDetector = findDetector(withMarkdown, "markdown-in-prose artifacts");
+  const ignoredDetector = findDetector(ignored, "markdown-in-prose artifacts");
+  assert.ok(markdownDetector.score > 0, "expected markdown artifacts to be detected without ignoreMd");
+  assert.equal(ignoredDetector.score, 0, "expected markdown score to be 0 with ignoreMd");
+  assert.match(ignoredDetector.detail, /0 header lines, 0 bold runs/);
+});
+
+test("ignoreMd does not affect '-' bullet lines", () => {
+  const bulletText = Array(10).fill("- A bullet point about the ordinary topic here today.").join("\n");
+  const ignored = detectAiUsage(bulletText, undefined, true);
+  const detector = findDetector(ignored, "markdown-in-prose artifacts");
+  assert.match(detector.detail, /10 bullet lines/);
+});
+
+test("report echoes back ignoreMd, defaulting to false", () => {
+  assert.equal(detectAiUsage(HUMAN_TEXT).ignoreMd, false);
+  assert.equal(detectAiUsage(HUMAN_TEXT, undefined, true).ignoreMd, true);
+});
+
+test("formatDetectionReport includes whether markdown was ignored", () => {
+  const formatted = formatDetectionReport(detectAiUsage(HUMAN_TEXT, undefined, true));
+  assert.match(formatted, /Markdown ignored \(\*, _, #\): yes/);
+});
+
 test("every detector score is within 0-1", () => {
   const report = detectAiUsage(AI_STUFFED_TEXT);
   for (const d of report.detectors) {

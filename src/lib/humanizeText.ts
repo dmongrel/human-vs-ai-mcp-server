@@ -6,7 +6,7 @@
 
 import { countAiTellPhrases } from "./aiPhrases.js";
 import { detectAiUsage, fleschReadingEase, type DocumentType } from "./detectAiUsage.js";
-import { mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
+import { mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 export interface HumanizeRecommendation {
   issue: string;
@@ -17,6 +17,7 @@ export interface HumanizeRecommendation {
 export interface HumanizeReport {
   aiLikelihoodScore: number;
   type: DocumentType | "default";
+  ignoreMd: boolean;
   recommendations: HumanizeRecommendation[];
 }
 
@@ -40,12 +41,13 @@ const HUMANIZE_PROFILES: Record<"default" | DocumentType, HumanizeProfile> = {
   strategic: { sentenceCovThreshold: 0.2, readabilityStdevThreshold: 3, flagMarkdown: false, emDashPer1000Threshold: 0, hedgeCountThreshold: 2 },
 };
 
-export function humanizeText(text: string, type?: DocumentType): HumanizeReport {
-  const detection = detectAiUsage(text, type);
+export function humanizeText(text: string, type?: DocumentType, ignoreMd?: boolean): HumanizeReport {
+  const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
+  const detection = detectAiUsage(workingText, type);
   const profile = HUMANIZE_PROFILES[type ?? "default"];
-  const sentences = splitSentences(text);
-  const words = tokenizeWords(text);
-  const lowerText = text.toLowerCase();
+  const sentences = splitSentences(workingText);
+  const words = tokenizeWords(workingText);
+  const lowerText = workingText.toLowerCase();
   const recommendations: HumanizeRecommendation[] = [];
 
   const phraseHits = countAiTellPhrases(lowerText);
@@ -76,8 +78,8 @@ export function humanizeText(text: string, type?: DocumentType): HumanizeReport 
     }
   }
 
-  const markdownBullets = (text.match(/^\s*[-*•]\s+/gm) ?? []).length;
-  const markdownHeaders = (text.match(/^\s{0,3}#{1,6}\s+/gm) ?? []).length;
+  const markdownBullets = (workingText.match(/^\s*[-*•]\s+/gm) ?? []).length;
+  const markdownHeaders = (workingText.match(/^\s{0,3}#{1,6}\s+/gm) ?? []).length;
   if (profile.flagMarkdown && markdownBullets + markdownHeaders > 0 && sentences.length > 0) {
     recommendations.push({
       issue: "Chat-style markdown left in prose",
@@ -86,7 +88,7 @@ export function humanizeText(text: string, type?: DocumentType): HumanizeReport 
     });
   }
 
-  const paragraphs = splitParagraphs(text);
+  const paragraphs = splitParagraphs(workingText);
   if (paragraphs.length >= 3) {
     const readabilityScores = paragraphs.map(fleschReadingEase).filter((s) => Number.isFinite(s));
     if (readabilityScores.length >= 3) {
@@ -101,7 +103,7 @@ export function humanizeText(text: string, type?: DocumentType): HumanizeReport 
     }
   }
 
-  const emDashCount = (text.match(/—/g) ?? []).length;
+  const emDashCount = (workingText.match(/—/g) ?? []).length;
   const emDashPer1000 = words.length > 0 ? (emDashCount / words.length) * 1000 : 0;
   if (emDashCount > 0 && emDashPer1000 > profile.emDashPer1000Threshold) {
     recommendations.push({
@@ -128,7 +130,7 @@ export function humanizeText(text: string, type?: DocumentType): HumanizeReport 
     });
   }
 
-  return { aiLikelihoodScore: detection.overallScore, type: type ?? "default", recommendations };
+  return { aiLikelihoodScore: detection.overallScore, type: type ?? "default", ignoreMd: ignoreMd ?? false, recommendations };
 }
 
 export function formatHumanizeReport(report: HumanizeReport): string {
@@ -137,6 +139,7 @@ export function formatHumanizeReport(report: HumanizeReport): string {
   lines.push(`=============================`);
   lines.push(`Current AI-likelihood score: ${report.aiLikelihoodScore}/100`);
   lines.push(`Ruleset: ${report.type}${report.type === "default" ? " (no type specified)" : ""}`);
+  lines.push(`Markdown ignored (*, _, #): ${report.ignoreMd ? "yes" : "no"}`);
   lines.push(``);
   for (const r of report.recommendations) {
     lines.push(`- ${r.issue}`);

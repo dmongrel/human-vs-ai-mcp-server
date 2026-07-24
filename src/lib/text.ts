@@ -16,6 +16,16 @@ export function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+// Strips literal '*', '_', and '#' markup characters (bold/italic emphasis,
+// whether written as *asterisks* or _underscores_, and ATX headers) so
+// callers can opt out of the markdown-in-prose signal for text that
+// legitimately uses those characters (e.g. chapter headers in a
+// manuscript). Deliberately narrow in scope — bullet lines using '-' are
+// left untouched.
+export function stripMarkdownMarkup(text: string): string {
+  return text.replace(/[*_#]/g, "");
+}
+
 export function tokenizeWords(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9']+/g) ?? []).filter((w) => w.length > 0);
 }

@@ -26,7 +26,7 @@
 // without touching the others — see `detectors` array below.
 
 import { AI_TELL_PHRASES, countAiTellPhrases } from "./aiPhrases.js";
-import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
+import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 export type DocumentType = "creative" | "strategic";
 
@@ -42,6 +42,7 @@ export interface DetectionReport {
   overallScore: number; // 0-100, likelihood of AI generation
   verdict: "likely-human" | "uncertain" | "likely-ai-generated";
   type: DocumentType | "default";
+  ignoreMd: boolean;
   wordCount: number;
   sentenceCount: number;
   detectors: DetectorResult[];
@@ -226,8 +227,9 @@ export function fleschReadingEase(text: string): number {
   return 206.835 - 1.015 * wordsPerSentence - 84.6 * syllablesPerWord;
 }
 
-export function detectAiUsage(text: string, type?: DocumentType): DetectionReport {
-  const trimmed = text.trim();
+export function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: boolean): DetectionReport {
+  const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
+  const trimmed = workingText.trim();
   const sentences = splitSentences(trimmed);
   const paragraphs = splitParagraphs(trimmed);
   const words = tokenizeWords(trimmed);
@@ -254,6 +256,7 @@ export function detectAiUsage(text: string, type?: DocumentType): DetectionRepor
     overallScore,
     verdict,
     type: type ?? "default",
+    ignoreMd: ignoreMd ?? false,
     wordCount: words.length,
     sentenceCount: sentences.length,
     detectors,
@@ -268,6 +271,7 @@ export function formatDetectionReport(report: DetectionReport): string {
   lines.push(`==========================`);
   lines.push(`Overall AI-likelihood score: ${report.overallScore}/100 (${report.verdict}) — 0 = reads as entirely human-written, 100 = reads as entirely AI-generated.`);
   lines.push(`Ruleset: ${report.type}${report.type === "default" ? " (no type specified)" : ""}`);
+  lines.push(`Markdown ignored (*, _, #): ${report.ignoreMd ? "yes" : "no"}`);
   lines.push(`Word count: ${report.wordCount}, Sentence count: ${report.sentenceCount}`);
   lines.push(``);
   lines.push(`Signal breakdown (each signal scored 0-100: 0 = strongly human-like on that signal, 100 = strongly AI-like on that signal):`);

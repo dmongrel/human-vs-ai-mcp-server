@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
+import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 test("splitSentences splits on terminal punctuation followed by a capital/quote", () => {
   const result = splitSentences("This is one. This is two! Is this three? Yes.");
@@ -16,6 +16,14 @@ test("splitSentences collapses internal whitespace", () => {
 test("splitParagraphs splits on blank lines and trims", () => {
   const result = splitParagraphs("Para one.\n\n  Para two.  \n\n\nPara three.");
   assert.deepEqual(result, ["Para one.", "Para two.", "Para three."]);
+});
+
+test("stripMarkdownMarkup removes '*', '_', and '#' only", () => {
+  assert.equal(stripMarkdownMarkup("# Header\n**bold** text\n_italic_ and __also bold__\n- bullet"), " Header\nbold text\nitalic and also bold\n- bullet");
+});
+
+test("stripMarkdownMarkup leaves text with none unchanged", () => {
+  assert.equal(stripMarkdownMarkup("Plain prose, no markup here."), "Plain prose, no markup here.");
 });
 
 test("tokenizeWords lowercases and strips punctuation", () => {

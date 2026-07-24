@@ -21,6 +21,10 @@ const textSourceSchema = {
     .enum(["creative", "strategic"])
     .optional()
     .describe("Ruleset to apply: 'creative' for novels/creative writing, 'strategic' for business documents, presentations, or marketing materials. Omit for a genre-agnostic default."),
+  ignoreMd: z
+    .boolean()
+    .optional()
+    .describe("If true, ignore markdown markup ('*', '_', and '#' characters only) before analysis, so legitimate use of those characters (e.g. chapter headers) isn't flagged as an AI artifact."),
 };
 
 function requireOneSource(input: { text?: string; filePath?: string }) {
@@ -39,10 +43,10 @@ server.registerTool(
     description: "Estimate the likelihood that text was AI-generated, using explainable stylometric heuristics. Call get_context({ topic: 'detect_ai_usage' }) for methodology details.",
     inputSchema: textSourceSchema,
   },
-  async ({ text, filePath, reportPath, type }) => {
+  async ({ text, filePath, reportPath, type, ignoreMd }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = detectAiUsage(input, type);
+    const report = detectAiUsage(input, type, ignoreMd);
     const output = await deliverOutput(formatDetectionReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }
@@ -55,10 +59,10 @@ server.registerTool(
     description: "Get actionable recommendations for making AI-leaning text read more naturally human. Call get_context({ topic: 'humanize_text' }) for details.",
     inputSchema: textSourceSchema,
   },
-  async ({ text, filePath, reportPath, type }) => {
+  async ({ text, filePath, reportPath, type, ignoreMd }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = humanizeText(input, type);
+    const report = humanizeText(input, type, ignoreMd);
     const output = await deliverOutput(formatHumanizeReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }

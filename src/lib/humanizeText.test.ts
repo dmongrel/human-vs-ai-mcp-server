@@ -130,6 +130,28 @@ test("formatHumanizeReport includes the ruleset used", () => {
   assert.match(formatted, /Ruleset: strategic/);
 });
 
+test("ignoreMd suppresses the markdown recommendation for '*', '_', and '#' but not '-' bullets", () => {
+  const headerText = "Here is some prose.\n\n## A Heading\n\n**Bold claim** follows here.";
+  const withMarkdown = humanizeText(headerText);
+  const ignored = humanizeText(headerText, undefined, true);
+  assert.ok(findRecommendation(withMarkdown, "Chat-style markdown left in prose"));
+  assert.equal(findRecommendation(ignored, "Chat-style markdown left in prose"), undefined);
+
+  const bulletText = "Here is some prose.\n\n- First point\n- Second point\n\nMore prose follows here.";
+  const bulletIgnored = humanizeText(bulletText, undefined, true);
+  assert.ok(findRecommendation(bulletIgnored, "Chat-style markdown left in prose"), "expected '-' bullets to still be flagged");
+});
+
+test("report echoes back ignoreMd, defaulting to false", () => {
+  assert.equal(humanizeText("Some plain text here.").ignoreMd, false);
+  assert.equal(humanizeText("Some plain text here.", undefined, true).ignoreMd, true);
+});
+
+test("formatHumanizeReport includes whether markdown was ignored", () => {
+  const formatted = formatHumanizeReport(humanizeText("Some plain text here.", undefined, true));
+  assert.match(formatted, /Markdown ignored \(\*, _, #\): yes/);
+});
+
 test("formatHumanizeReport includes the score and every recommendation", () => {
   const report = humanizeText("Let's delve into this seamless, robust plan.");
   const formatted = formatHumanizeReport(report);

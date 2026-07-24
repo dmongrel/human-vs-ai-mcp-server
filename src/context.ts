@@ -13,6 +13,8 @@ Output: results are returned inline over stdio by default. Pass 'reportPath' to 
 
 Both detect_ai_usage and humanize_text also accept an optional 'type': "creative" (novels/creative writing) or "strategic" (business documents, presentations, marketing materials). If you called detect_ai_usage with a type, pass the same type to humanize_text so its recommendations use a consistent ruleset.
 
+Both tools also accept an optional 'ignoreMd' boolean: if true, literal '*', '_', and '#' characters are stripped before analysis, so legitimate use of those characters (e.g. chapter headers, emphasis) isn't flagged as an AI markdown artifact. '-' bullet lines are unaffected. Pass the same ignoreMd value to both tools when calling them on the same text.
+
 Call get_context with { "topic": "detect_ai_usage" } or { "topic": "humanize_text" } for details on each tool's scoring methodology and output shape.`,
 
   detect_ai_usage: `detect_ai_usage estimates the likelihood a text was AI-generated using explainable stylometric heuristics — it is NOT a trained classifier and should not be treated as a verdict.
@@ -27,11 +29,13 @@ Signals used (see src/lib/detectAiUsage.ts for implementation and research refer
 
 Each signal contributes a weighted 0-1 AI-likelihood score; the weighted average becomes an overall 0-100 score with a verdict band: likely-human (<35), uncertain (35-65), likely-ai-generated (>65).
 
-Input: { text? , filePath? , reportPath? , type? } — exactly one of text/filePath required; reportPath and type optional.
+Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional.
 
 'type' selects a ruleset ("creative" or "strategic") that reweights the six signals and adjusts markdown/em-dash saturation thresholds for that genre — see the "Rulesets" section below. Omit it for genre-agnostic default weights.
 
-Output: a formatted report with the overall score, verdict, the ruleset used, and a full breakdown of each signal's score and supporting detail, so the caller can see *why* the score landed where it did and disagree with individual signals.
+'ignoreMd' strips literal '*', '_', and '#' characters before analysis, neutralizing the markdown-in-prose signal's header and bold-run counts (but not '-' bullet lines) — useful for manuscripts that legitimately use those characters for chapter headers or emphasis.
+
+Output: a formatted report with the overall score, verdict, the ruleset used, whether markdown was ignored, and a full breakdown of each signal's score and supporting detail, so the caller can see *why* the score landed where it did and disagree with individual signals.
 
 This module is intentionally extensible: each detector is an isolated function in a \`detectors\` array. Adding a new signal (e.g. a real perplexity check against a local model, n-gram repetition analysis) means adding one function and one array entry — no changes needed elsewhere.
 
@@ -49,9 +53,9 @@ Recommendation categories currently implemented (see src/lib/humanizeText.ts):
 - Overused em dashes, suggesting each "—" be replaced with a space-hyphen-space ( - ) or the sentence restructured.
 - Excessive hedging language ("it's worth noting", "arguably", etc.).
 
-Input: { text? , filePath? , reportPath? , type? } — same shape as detect_ai_usage. If you called detect_ai_usage with a type, pass the same type here for consistent recommendations.
+Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — same shape as detect_ai_usage. If you called detect_ai_usage with a type and/or ignoreMd, pass the same values here for consistent recommendations.
 
-Output: current AI-likelihood score, the ruleset used, plus a list of { issue, suggestion, evidence } recommendations. If no patterns are flagged, the report says so explicitly rather than returning nothing.
+Output: current AI-likelihood score, the ruleset used, whether markdown was ignored, plus a list of { issue, suggestion, evidence } recommendations. If no patterns are flagged, the report says so explicitly rather than returning nothing.
 
 This is also extensible: add a new check as a block that pushes onto \`recommendations\` in humanizeText().
 
