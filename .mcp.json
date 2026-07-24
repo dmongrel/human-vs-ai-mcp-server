@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "human-vs-ai-mcp-server": {
-      "command": "bun",
-      "args": ["run", "src/index.ts"]
-    }
-  }
-}
