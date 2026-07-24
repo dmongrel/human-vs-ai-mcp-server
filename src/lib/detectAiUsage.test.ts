@@ -55,7 +55,7 @@ test("overall score is within 0-100 and matches verdict bands", () => {
   }
 });
 
-test("returns all five named detectors with weights that sum to 1", () => {
+test("returns all six named detectors with weights that sum to 1", () => {
   const report = detectAiUsage(HUMAN_TEXT);
   const names = report.detectors.map((d) => d.name).sort();
   assert.deepEqual(names, [
@@ -64,9 +64,82 @@ test("returns all five named detectors with weights that sum to 1", () => {
     "readability uniformity",
     "sentence-length burstiness",
     "lexical diversity",
+    "em dash overuse",
   ].sort());
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
   assert.ok(Math.abs(totalWeight - 1) < 1e-9, `weights should sum to 1, got ${totalWeight}`);
+});
+
+test("em dash detector scores high for heavy em dash use and reports no hits for clean text", () => {
+  const heavy = detectAiUsage("This is a sentence — with an em dash — and another — right here — for emphasis — repeatedly.");
+  const heavyDetector = findDetector(heavy, "em dash overuse");
+  assert.ok(heavyDetector.score > 0.5, `expected high em-dash score, got ${heavyDetector.score}`);
+  assert.match(heavyDetector.detail, /em dashes/);
+
+  const clean = detectAiUsage(HUMAN_TEXT);
+  const cleanDetector = findDetector(clean, "em dash overuse");
+  assert.equal(cleanDetector.score, 0);
+  assert.match(cleanDetector.detail, /No em dashes detected/);
+});
+
+test("report echoes back the type used, defaulting to 'default'", () => {
+  assert.equal(detectAiUsage(HUMAN_TEXT).type, "default");
+  assert.equal(detectAiUsage(HUMAN_TEXT, "creative").type, "creative");
+  assert.equal(detectAiUsage(HUMAN_TEXT, "strategic").type, "strategic");
+});
+
+test("all three rulesets produce weights that sum to 1", () => {
+  for (const type of [undefined, "creative", "strategic"] as const) {
+    const report = detectAiUsage(HUMAN_TEXT, type);
+    const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
+    assert.ok(Math.abs(totalWeight - 1) < 1e-9, `${type ?? "default"} weights should sum to 1, got ${totalWeight}`);
+  }
+});
+
+test("strategic ruleset is more tolerant of markdown/bullets than default", () => {
+  // Low bullet density (2 of 20 lines) so neither profile saturates at 1.0,
+  // letting the saturation-threshold difference actually show up.
+  const prose = Array(18).fill("This is an ordinary prose line with no markup at all.");
+  const bulletLines = ["- A bullet point about the plan.", "- Another bullet point here."];
+  const mixedText = [...prose, ...bulletLines].join("\n");
+  const defaultReport = detectAiUsage(mixedText);
+  const strategicReport = detectAiUsage(mixedText, "strategic");
+  const defaultMarkdown = findDetector(defaultReport, "markdown-in-prose artifacts");
+  const strategicMarkdown = findDetector(strategicReport, "markdown-in-prose artifacts");
+  assert.ok(
+    strategicMarkdown.score < defaultMarkdown.score,
+    `expected strategic markdown score (${strategicMarkdown.score}) < default (${defaultMarkdown.score})`
+  );
+});
+
+test("creative ruleset is more tolerant of em dashes than default", () => {
+  // ~10 em dashes per 1000 words: past default's saturation point (8) but
+  // below creative's (16), so the two profiles actually diverge.
+  const dashSentence = "One point — tied to another idea.";
+  const filler = "This is an ordinary filler sentence with no dashes at all. ";
+  const emDashText = (dashSentence + " " + filler.repeat(6)).trim();
+  const defaultReport = detectAiUsage(emDashText);
+  const creativeReport = detectAiUsage(emDashText, "creative");
+  const defaultEmDash = findDetector(defaultReport, "em dash overuse");
+  const creativeEmDash = findDetector(creativeReport, "em dash overuse");
+  assert.ok(
+    creativeEmDash.score < defaultEmDash.score,
+    `expected creative em-dash score (${creativeEmDash.score}) < default (${defaultEmDash.score})`
+  );
+});
+
+test("strategic ruleset weights AI stock phrases more heavily than default", () => {
+  const defaultReport = detectAiUsage(AI_STUFFED_TEXT);
+  const strategicReport = detectAiUsage(AI_STUFFED_TEXT, "strategic");
+  const defaultPhrase = findDetector(defaultReport, "AI stock-phrase usage");
+  const strategicPhrase = findDetector(strategicReport, "AI stock-phrase usage");
+  assert.ok(strategicPhrase.weight > defaultPhrase.weight);
+});
+
+test("formatDetectionReport includes the ruleset used", () => {
+  const report = detectAiUsage(HUMAN_TEXT, "creative");
+  const formatted = formatDetectionReport(report);
+  assert.match(formatted, /Ruleset: creative/);
 });
 
 test("every detector score is within 0-1", () => {

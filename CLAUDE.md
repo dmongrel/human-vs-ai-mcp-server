@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server providing tooling to:
 - Detect AI usage in text (estimate likelihood a given text was AI-generated), with an explainable per-signal breakdown.
 - Offer recommendations to humanize AI-generated text.
 
-Not yet published to npm — see [README.md](./README.md) for install/usage and [TOOLS.md](./TOOLS.md) for the maintained tool reference.
+Published on GitHub at [dmongrel/human-vs-ai-mcp-server](https://github.com/dmongrel/human-vs-ai-mcp-server) (`master` is the default and only branch); not yet published to npm — see [README.md](./README.md) for install/usage and [TOOLS.md](./TOOLS.md) for the maintained tool reference.
 
 ## Commands
 
@@ -21,8 +21,8 @@ Not yet published to npm — see [README.md](./README.md) for install/usage and 
 
 - TypeScript compiles from `src/` to `dist/` (see `tsconfig.json`: `commonjs` module, `es2016` target, `strict` mode, `outDir: dist`).
 - `src/index.ts` is the entry point (shebang `#!/usr/bin/env node`, also wired as the `bin` target in `package.json`): constructs an `McpServer`, registers tools with `server.registerTool(name, { title, description, inputSchema }, handler)` using `zod` schemas, then connects a `StdioServerTransport`. Tool `description` fields are kept short by design — detailed usage docs live behind the `get_context` tool instead (see `src/context.ts`), so keep new tools' descriptions terse and put the real explanation in `CONTEXT`.
-- `src/lib/detectAiUsage.ts` — the heuristic AI-detection engine. Each signal (sentence-length burstiness, lexical diversity, AI stock-phrase frequency, readability uniformity, markdown-in-prose artifacts) is an isolated function returned in a `detectors` array and combined via weighted average into a 0-100 score. Add new signals by adding one function + one array entry; nothing else needs to change. Research references are cited in comments at the top of the file.
-- `src/lib/humanizeText.ts` — builds actionable `{ issue, suggestion, evidence }` recommendations on top of the same signals; does not rewrite text itself.
+- `src/lib/detectAiUsage.ts` — the heuristic AI-detection engine. Each signal (sentence-length burstiness, lexical diversity, AI stock-phrase frequency, readability uniformity, markdown-in-prose artifacts, em dash overuse) is an isolated function returned in a `detectors` array and combined via weighted average into a 0-100 score. Add new signals by adding one function + one array entry; nothing else needs to change. Research references are cited in comments at the top of the file. An optional `type: "creative" | "strategic"` parameter selects a `WEIGHT_PROFILES` entry that reweights the signals and adjusts markdown/em-dash saturation thresholds for that genre (see comments above `WEIGHT_PROFILES`); omit it for the genre-agnostic `default` profile.
+- `src/lib/humanizeText.ts` — builds actionable `{ issue, suggestion, evidence }` recommendations on top of the same signals; does not rewrite text itself. Also accepts the same `type` parameter, mapped through `HUMANIZE_PROFILES` to per-check thresholds (e.g. `strategic` skips the markdown recommendation entirely; `creative` tolerates more em dashes/readability drift). When calling both tools on the same text, pass the same `type` to each for consistent results.
 - `src/lib/aiPhrases.ts` — the list of known LLM stock phrases used by the phrase-frequency detector; extend this list as new "AI tells" are documented.
 - `src/lib/text.ts` — hand-written tokenization/statistics helpers (sentence/paragraph splitting, syllable counting, mean/stdev). Deliberately dependency-free per project convention — prefer writing small routines here over adding an npm package.
 - `src/lib/io.ts` — shared input/output handling for tools: `resolveInputText` accepts either `text` or `filePath` (exactly one required); `deliverOutput` returns content inline or writes it to `reportPath` if given, creating directories as needed.

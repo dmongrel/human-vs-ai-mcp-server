@@ -37,6 +37,19 @@ test("flags chat-style markdown left in prose", () => {
   assert.match(rec!.evidence, /1 header lines/);
 });
 
+test("flags overused em dashes with the space-hyphen-space suggestion", () => {
+  const report = humanizeText("This is one point — and this is another — tied together.");
+  const rec = findRecommendation(report, "Overused em dashes");
+  assert.ok(rec, "expected an em-dash recommendation");
+  assert.match(rec!.suggestion, / - /);
+  assert.match(rec!.evidence, /2 em dashes/);
+});
+
+test("does not flag em dashes when none are present", () => {
+  const report = humanizeText("This sentence has no dashes of any kind in it at all.");
+  assert.equal(findRecommendation(report, "Overused em dashes"), undefined);
+});
+
 test("flags excessive hedging language", () => {
   const text = "It's worth noting that this could work. Arguably, it should be noted that results vary. To some extent, one might argue otherwise.";
   const report = humanizeText(text);
@@ -79,6 +92,42 @@ test("aiLikelihoodScore matches detectAiUsage's overall score", () => {
   const text = "In today's fast-paced world, it's important to note that we must delve into the tapestry of possibilities.";
   const report = humanizeText(text);
   assert.ok(report.aiLikelihoodScore >= 0 && report.aiLikelihoodScore <= 100);
+});
+
+test("report echoes back the type used, defaulting to 'default'", () => {
+  assert.equal(humanizeText("Some plain text here.").type, "default");
+  assert.equal(humanizeText("Some plain text here.", "creative").type, "creative");
+  assert.equal(humanizeText("Some plain text here.", "strategic").type, "strategic");
+});
+
+test("strategic ruleset does not flag markdown left in prose", () => {
+  const text = "Here is some prose.\n\n- First point\n- Second point\n\n## A Heading\n\nMore prose follows here.";
+  const report = humanizeText(text, "strategic");
+  assert.equal(findRecommendation(report, "Chat-style markdown left in prose"), undefined);
+});
+
+test("creative ruleset is more tolerant of a single, infrequent em dash than default", () => {
+  const dashSentence = "This is one point — tied to another idea nearby.";
+  const filler = "The quick brown fox jumps over the lazy dog again and without much variation. ";
+  const text = dashSentence + " " + filler.repeat(15); // dilutes em-dash frequency below the creative threshold
+  const defaultReport = humanizeText(text);
+  const creativeReport = humanizeText(text, "creative");
+  assert.ok(findRecommendation(defaultReport, "Overused em dashes"), "expected default to flag the em dash");
+  assert.equal(findRecommendation(creativeReport, "Overused em dashes"), undefined);
+});
+
+test("strategic ruleset requires less sentence-length variance to avoid the uniformity flag", () => {
+  const text = "The team met early today. Plan looks solid. Results continue to look quite good. Next steps stay clear. Budget stays fine. Timelines currently hold up well.";
+  const defaultReport = humanizeText(text);
+  const strategicReport = humanizeText(text, "strategic");
+  assert.ok(findRecommendation(defaultReport, "Uniform sentence length"), "expected default to flag uniform sentences");
+  assert.equal(findRecommendation(strategicReport, "Uniform sentence length"), undefined);
+});
+
+test("formatHumanizeReport includes the ruleset used", () => {
+  const report = humanizeText("Some plain text here.", "strategic");
+  const formatted = formatHumanizeReport(report);
+  assert.match(formatted, /Ruleset: strategic/);
 });
 
 test("formatHumanizeReport includes the score and every recommendation", () => {

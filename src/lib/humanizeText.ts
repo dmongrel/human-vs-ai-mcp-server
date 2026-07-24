@@ -5,7 +5,7 @@
 // layer doesn't have.
 
 import { countAiTellPhrases } from "./aiPhrases.js";
-import { detectAiUsage, fleschReadingEase } from "./detectAiUsage.js";
+import { detectAiUsage, fleschReadingEase, type DocumentType } from "./detectAiUsage.js";
 import { mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
 
 export interface HumanizeRecommendation {
@@ -16,12 +16,35 @@ export interface HumanizeRecommendation {
 
 export interface HumanizeReport {
   aiLikelihoodScore: number;
+  type: DocumentType | "default";
   recommendations: HumanizeRecommendation[];
 }
 
-export function humanizeText(text: string): HumanizeReport {
-  const detection = detectAiUsage(text);
+// Thresholds mirror the intent of detectAiUsage's WEIGHT_PROFILES: "creative"
+// (fiction/narrative) expects more variance and near-zero markdown/em-dash
+// use, so it flags those more readily; "strategic" (business/marketing docs)
+// treats structured markdown and uniform, punchy sentences as normal genre
+// conventions, so it's more lenient on those and stricter on AI stock
+// phrases (business buzzwords are the strongest tell in that genre).
+interface HumanizeProfile {
+  sentenceCovThreshold: number;
+  readabilityStdevThreshold: number;
+  flagMarkdown: boolean;
+  emDashPer1000Threshold: number;
+  hedgeCountThreshold: number;
+}
+
+const HUMANIZE_PROFILES: Record<"default" | DocumentType, HumanizeProfile> = {
+  default: { sentenceCovThreshold: 0.35, readabilityStdevThreshold: 6, flagMarkdown: true, emDashPer1000Threshold: 0, hedgeCountThreshold: 2 },
+  creative: { sentenceCovThreshold: 0.45, readabilityStdevThreshold: 10, flagMarkdown: true, emDashPer1000Threshold: 6, hedgeCountThreshold: 4 },
+  strategic: { sentenceCovThreshold: 0.2, readabilityStdevThreshold: 3, flagMarkdown: false, emDashPer1000Threshold: 0, hedgeCountThreshold: 2 },
+};
+
+export function humanizeText(text: string, type?: DocumentType): HumanizeReport {
+  const detection = detectAiUsage(text, type);
+  const profile = HUMANIZE_PROFILES[type ?? "default"];
   const sentences = splitSentences(text);
+  const words = tokenizeWords(text);
   const lowerText = text.toLowerCase();
   const recommendations: HumanizeRecommendation[] = [];
 
@@ -44,7 +67,7 @@ export function humanizeText(text: string): HumanizeReport {
     const m = mean(lengths);
     const sd = stdev(lengths);
     const cov = m > 0 ? sd / m : 0;
-    if (cov < 0.35) {
+    if (cov < profile.sentenceCovThreshold) {
       recommendations.push({
         issue: "Uniform sentence length",
         suggestion: "Vary sentence length deliberately — mix short, punchy sentences with longer, more complex ones.",
@@ -55,7 +78,7 @@ export function humanizeText(text: string): HumanizeReport {
 
   const markdownBullets = (text.match(/^\s*[-*•]\s+/gm) ?? []).length;
   const markdownHeaders = (text.match(/^\s{0,3}#{1,6}\s+/gm) ?? []).length;
-  if (markdownBullets + markdownHeaders > 0 && sentences.length > 0) {
+  if (profile.flagMarkdown && markdownBullets + markdownHeaders > 0 && sentences.length > 0) {
     recommendations.push({
       issue: "Chat-style markdown left in prose",
       suggestion: "If this text is meant to read as prose (an email, essay, article), convert bullet lists and headers into flowing sentences and paragraphs.",
@@ -68,7 +91,7 @@ export function humanizeText(text: string): HumanizeReport {
     const readabilityScores = paragraphs.map(fleschReadingEase).filter((s) => Number.isFinite(s));
     if (readabilityScores.length >= 3) {
       const sd = stdev(readabilityScores);
-      if (sd < 6) {
+      if (sd < profile.readabilityStdevThreshold) {
         recommendations.push({
           issue: "Uniform readability across paragraphs",
           suggestion: "Let sentence complexity and word choice drift naturally between paragraphs instead of holding a single, even register throughout.",
@@ -78,8 +101,18 @@ export function humanizeText(text: string): HumanizeReport {
     }
   }
 
+  const emDashCount = (text.match(/—/g) ?? []).length;
+  const emDashPer1000 = words.length > 0 ? (emDashCount / words.length) * 1000 : 0;
+  if (emDashCount > 0 && emDashPer1000 > profile.emDashPer1000Threshold) {
+    recommendations.push({
+      issue: "Overused em dashes",
+      suggestion: "Replace each em dash (—) with a space, hyphen, space ( - ) or restructure the sentence; heavy em dash use is a well-known LLM stylistic tell.",
+      evidence: `${emDashCount} em dash${emDashCount === 1 ? "" : "es"} found (${emDashPer1000.toFixed(1)} per 1000 words).`,
+    });
+  }
+
   const hedgeMatches = lowerText.match(/\b(it's worth noting|it should be noted|one might argue|arguably|in many ways|to some extent)\b/g) ?? [];
-  if (hedgeMatches.length >= 2) {
+  if (hedgeMatches.length >= profile.hedgeCountThreshold) {
     recommendations.push({
       issue: "Excessive hedging language",
       suggestion: "Commit to direct statements where you have the evidence to do so; reserve hedges for genuine uncertainty.",
@@ -95,7 +128,7 @@ export function humanizeText(text: string): HumanizeReport {
     });
   }
 
-  return { aiLikelihoodScore: detection.overallScore, recommendations };
+  return { aiLikelihoodScore: detection.overallScore, type: type ?? "default", recommendations };
 }
 
 export function formatHumanizeReport(report: HumanizeReport): string {
@@ -103,6 +136,7 @@ export function formatHumanizeReport(report: HumanizeReport): string {
   lines.push(`Humanization Recommendations`);
   lines.push(`=============================`);
   lines.push(`Current AI-likelihood score: ${report.aiLikelihoodScore}/100`);
+  lines.push(`Ruleset: ${report.type}${report.type === "default" ? " (no type specified)" : ""}`);
   lines.push(``);
   for (const r of report.recommendations) {
     lines.push(`- ${r.issue}`);
