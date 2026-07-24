@@ -55,7 +55,7 @@ test("overall score is within 0-100 and matches verdict bands", async () => {
   }
 });
 
-test("returns all six named detectors with weights that sum to 1 when MODEL_RUNNER_URL is unset", async () => {
+test("returns all eight active named detectors (model-runner perplexity stays disabled)", async () => {
   const report = await detectAiUsage(HUMAN_TEXT);
   const names = report.detectors.map((d) => d.name).sort();
   assert.deepEqual(names, [
@@ -65,9 +65,11 @@ test("returns all six named detectors with weights that sum to 1 when MODEL_RUNN
     "sentence-length burstiness",
     "lexical diversity",
     "em dash overuse",
+    "n-gram repetition",
+    "paragraph coherence",
   ].sort());
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1) < 1e-9, `weights should sum to 1, got ${totalWeight}`);
+  assert.ok(Math.abs(totalWeight - 1.2) < 1e-9, `weights should sum to 1.2, got ${totalWeight}`);
 });
 
 test("em dash detector scores high for heavy em dash use and reports no hits for clean text", async () => {
@@ -88,11 +90,11 @@ test("report echoes back the type used, defaulting to 'default'", async () => {
   assert.equal((await detectAiUsage(HUMAN_TEXT, "strategic")).type, "strategic");
 });
 
-test("all three rulesets produce weights that sum to 1", async () => {
+test("all three rulesets produce weights that sum to 1.2", async () => {
   for (const type of [undefined, "creative", "strategic"] as const) {
     const report = await detectAiUsage(HUMAN_TEXT, type);
     const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-    assert.ok(Math.abs(totalWeight - 1) < 1e-9, `${type ?? "default"} weights should sum to 1, got ${totalWeight}`);
+    assert.ok(Math.abs(totalWeight - 1.2) < 1e-9, `${type ?? "default"} weights should sum to 1.2, got ${totalWeight}`);
   }
 });
 
@@ -275,26 +277,57 @@ test("model-runner perplexity detector stays disabled even when the runner is co
   }) as typeof fetch;
 
   const report = await detectAiUsage(HUMAN_TEXT);
-  // Disabled via MODEL_PERPLEXITY_SIGNAL_ENABLED — see detectAiUsage.ts.
-  // Found unreliable in practice (structural bias + impractically slow
-  // against every runner/model tested); kept off, not removed, in case a
-  // fix is found later.
+  // Disabled via the modelPerplexityDetector's `enabled: false` — see
+  // src/lib/detectors/modelPerplexity.ts. Found unreliable in practice
+  // (structural bias + impractically slow against every runner/model
+  // tested); kept off, not removed, in case a fix is found later.
   assert.equal(report.detectors.find((d) => d.name === "model-runner perplexity"), undefined);
-  assert.equal(report.detectors.length, 6);
+  assert.equal(report.detectors.length, 8);
   assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1) < 1e-9);
+  assert.ok(Math.abs(totalWeight - 1.2) < 1e-9);
 });
 
-test("model-runner perplexity detector is cleanly omitted when the runner is configured but unreachable", async () => {
-  process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  globalThis.fetch = (async () => {
-    throw new Error("ECONNREFUSED");
-  }) as typeof fetch;
+// --- N-gram repetition detector ---
 
+test("n-gram repetition detector scores high for repetitive trigrams and reports the repeated phrase", async () => {
+  const repetitive = "We will move forward together. We will move forward together. We will move forward together and we will move forward together, because moving forward together is what we do, we will move forward together always. Every single day we will move forward together, and every single night we will move forward together, no matter what happens we will move forward together as one unified team with one unified purpose and one unified vision for the future ahead.";
+  const report = await detectAiUsage(repetitive);
+  const detector = findDetector(report, "n-gram repetition");
+  assert.ok(detector.score > 0.5, `expected high repetition score, got ${detector.score}`);
+  assert.match(detector.detail, /move forward together/);
+});
+
+test("n-gram repetition detector scores low for varied human text", async () => {
+  const report = await detectAiUsage(HUMAN_TEXT + " " + HUMAN_TEXT.split(" ").reverse().join(" "));
+  const detector = findDetector(report, "n-gram repetition");
+  assert.ok(detector.score < 0.5, `expected low repetition score for varied text, got ${detector.score}`);
+});
+
+test("n-gram repetition detector is neutral (0.5) for too-short input", async () => {
+  const report = await detectAiUsage("Just a few short words here, not much text.");
+  const detector = findDetector(report, "n-gram repetition");
+  assert.equal(detector.score, 0.5);
+});
+
+// --- Paragraph coherence detector ---
+
+test("paragraph coherence detector scores high when adjacent paragraphs share heavy vocabulary overlap", async () => {
+  const paragraph = "The quarterly revenue growth strategy focuses on quarterly revenue growth across every market segment we serve. Quarterly revenue growth remains the primary quarterly revenue growth metric this year.";
+  const text = Array(4).fill(paragraph).join("\n\n");
+  const report = await detectAiUsage(text);
+  const detector = findDetector(report, "paragraph coherence");
+  assert.ok(detector.score > 0.5, `expected high coherence score for repeated-topic paragraphs, got ${detector.score}`);
+});
+
+test("paragraph coherence detector scores low when paragraphs digress topically", async () => {
   const report = await detectAiUsage(HUMAN_TEXT);
-  assert.equal(report.detectors.find((d) => d.name === "model-runner perplexity"), undefined);
-  assert.equal(report.detectors.length, 6);
-  const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1) < 1e-9);
+  const detector = findDetector(report, "paragraph coherence");
+  assert.ok(detector.score < 0.5, `expected low coherence score for digressive human text, got ${detector.score}`);
+});
+
+test("paragraph coherence detector is neutral (0.5) with too few paragraphs", async () => {
+  const report = await detectAiUsage("Just one short paragraph here with no others to compare against.");
+  const detector = findDetector(report, "paragraph coherence");
+  assert.equal(detector.score, 0.5);
 });

@@ -5,8 +5,8 @@
 // layer doesn't have.
 
 import { countAiTellPhrases } from "./aiPhrases.js";
-import { detectAiUsage, fleschReadingEase, type DocumentType } from "./detectAiUsage.js";
-import { mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
+import { detectAiUsage, type DocumentType } from "./detectAiUsage.js";
+import { fleschReadingEase, mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 export interface HumanizeRecommendation {
   issue: string;

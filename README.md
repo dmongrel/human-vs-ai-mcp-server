@@ -4,7 +4,7 @@
 
 **`human-vs-ai-mcp-server`** is a Model Context Protocol (MCP) server that gives AI agents tools to reason about AI-authored text: estimating whether a piece of text was AI-generated, and getting concrete recommendations for making AI-leaning text read more naturally human.
 
-Detection and recommendations are built on explainable, dependency-free stylometric heuristics (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown-in-prose artifacts) rather than an opaque trained classifier — every score comes with the reasoning behind it. See [TOOLS.md](./TOOLS.md) for the full tool list and [`get_context`](./TOOLS.md#get_context) for in-depth methodology notes.
+Detection and recommendations are built on explainable, dependency-free stylometric heuristics (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown-in-prose artifacts, n-gram repetition, paragraph coherence) rather than an opaque trained classifier — every score comes with the reasoning behind it. Each signal is a pluggable, isolated module (`src/lib/detectors/`), and third parties can add their own via [plugins](#plugins) without forking the project. See [TOOLS.md](./TOOLS.md) for the full tool list and [`get_context`](./TOOLS.md#get_context) for in-depth methodology notes.
 
 Written in TypeScript, it runs on Node.js using the stdio transport protocol, making it suitable for integration with any MCP-compatible client such as Claude Desktop or Claude Code.
 
@@ -16,6 +16,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 - [Installation](#installation)
 - [Usage](#usage)
 - [Tools](#tools)
+- [Plugins](#plugins)
 - [Model runner (currently disabled)](#model-runner-currently-disabled)
 - [Testing](#testing)
 - [Design principles](#design-principles)
@@ -95,9 +96,59 @@ Every analysis tool accepts input either as text passed directly (e.g. from an A
 
 ---
 
+## Plugins
+
+`detect_ai_usage`'s scoring is a weighted combination of independent signals ("detectors"), each an isolated module implementing a shared `Detector` interface (`src/lib/detectors/types.ts`):
+
+```ts
+interface Detector {
+  id: string;
+  name: string;
+  enabled: boolean;
+  weight(type: "default" | "creative" | "strategic"): number;
+  run(ctx: DetectorContext): DetectorRunResult | null | Promise<DetectorRunResult | null>;
+}
+```
+
+The built-in signals live under `src/lib/detectors/` and are registered in `src/lib/detectors/index.ts` — adding or removing a built-in signal touches only that directory.
+
+**Third-party plugins**, for anyone who wants to add a detector without forking the project: set the `PLUGINS_DIR` environment variable (in your MCP client config's `env` block) to a directory of plain **CommonJS `.js` files** — not TypeScript; this package ships compiled `commonjs` output and doesn't bundle a TypeScript compiler to compile plugins at runtime, and adding one would violate the project's minimal-dependencies convention. Each file should export a `Detector`-shaped object as `module.exports.detector`, `module.exports.default`, or `module.exports` itself:
+
+```js
+// my-detector.js
+module.exports.detector = {
+  id: "my-custom-signal",
+  name: "my custom signal",
+  enabled: true,
+  weight: (type) => 0.1,
+  run: (ctx) => {
+    // ctx: { text, sentences, paragraphs, words, lowerText, type }
+    return { name: "my custom signal", score: 0.5, detail: "explain the score here" };
+  },
+};
+```
+
+`PLUGINS_DIR` is unset by default, so nothing changes unless you opt in. The directory is scanned fresh on every `detect_ai_usage` call, so you can add/edit plugin files without restarting the server. Loading fails open per file: a missing directory yields no plugins; a file that throws, doesn't export a valid `Detector`, or whose `id` collides with an existing detector is skipped with a warning on stderr (never stdout, since this is an MCP server using stdio for the protocol) rather than crashing the server.
+
+**Trust note**: plugin code runs in-process with full Node.js privileges, exactly like any other code this server loads. Only point `PLUGINS_DIR` at a directory of files you trust — there is no sandboxing.
+
+```json
+{
+  "mcpServers": {
+    "human-vs-ai-mcp-server": {
+      "command": "node",
+      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
+      "env": { "PLUGINS_DIR": "/absolute/path/to/your/plugins" }
+    }
+  }
+}
+```
+
+---
+
 ## Model runner (currently disabled)
 
-An optional **7th detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`MODEL_PERPLEXITY_SIGNAL_ENABLED = false` in `src/lib/detectAiUsage.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
+An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/modelPerplexity.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
 
 ### What was tried
 
@@ -124,7 +175,7 @@ Neither problem is fixable by picking a better model or runner — they're inher
 
 ### If you want to pick this back up
 
-The plumbing is intact — env vars, chunking, timeout handling, similarity verification, `modelRunner.test.ts` — set these in your MCP client config's `env` block to exercise it (see the `human-vs-ai-mcp-server-with-model-runner` entry in [example-mcp.json](./example-mcp.json)), then flip `MODEL_PERPLEXITY_SIGNAL_ENABLED` to `true` in `src/lib/detectAiUsage.ts`:
+The plumbing is intact — env vars, chunking, timeout handling, similarity verification, `modelRunner.test.ts` — set these in your MCP client config's `env` block to exercise it (see the `human-vs-ai-mcp-server-with-model-runner` entry in [example-mcp.json](./example-mcp.json)), then flip `enabled` to `true` in `src/lib/detectors/modelPerplexity.ts`:
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
@@ -151,4 +202,4 @@ Runs the `detect_ai_usage` heuristic test suite (`src/lib/*.test.ts`) using Node
 
 - **Dependencies kept minimal.** Only `@modelcontextprotocol/sdk` (protocol implementation) and `zod` (input schema validation) are runtime dependencies. Small routines — tokenization, syllable counting, statistics — are hand-written rather than pulled in from third-party packages.
 - **Explainable over opaque.** Every score is a weighted combination of named, inspectable signals, not a black-box model output.
-- **Extensible by design.** Each detection signal and each humanization recommendation is an isolated function; adding a new one doesn't require touching the others.
+- **Extensible by design.** Each detection signal is an isolated module implementing a shared `Detector` interface (`src/lib/detectors/`), and each humanization recommendation is an isolated check; adding a new one doesn't require touching the others. Third parties can add detection signals without forking the project at all — see [Plugins](#plugins).

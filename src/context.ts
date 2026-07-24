@@ -19,13 +19,15 @@ Call get_context with { "topic": "detect_ai_usage" } or { "topic": "humanize_tex
 
   detect_ai_usage: `detect_ai_usage estimates the likelihood a text was AI-generated using explainable stylometric heuristics — it is NOT a trained classifier and should not be treated as a verdict.
 
-Signals used (see src/lib/detectAiUsage.ts for implementation and research references):
+Signals used (each is its own file under src/lib/detectors/, implementing the shared Detector interface — see src/lib/detectors/types.ts):
 - Sentence-length burstiness: human writing varies sentence length more than typical LLM output (cf. Gehrmann et al., "GLTR", 2019; Mitchell et al., "DetectGPT", 2023).
 - Lexical diversity: a rolling type-token ratio (simplified MATTR); AI text tends toward a narrower, more predictable vocabulary.
 - AI stock-phrase usage: frequency of phrases commonly overused by LLMs ("delve into", "it's important to note", "in conclusion", etc.), compiled from public AI-detection write-ups.
 - Readability uniformity: variance in Flesch Reading Ease across paragraphs; very uniform readability suggests a single generative process.
 - Markdown-in-prose artifacts: bullet/header/bold markup left in what should be plain prose, a common copy-paste artifact from chat output.
 - Em dash overuse: frequency of the "—" character, a widely reported LLM stylistic tic (notably ChatGPT).
+- N-gram repetition: diversity of 3-word sequences (trigrams); repeated trigrams are a known generation artifact (cf. Holtzman et al., "The Curious Case of Neural Text Degeneration", 2020).
+- Paragraph coherence: cosine similarity between adjacent paragraphs' content-word vectors; unusually high topic overlap paragraph-to-paragraph suggests a single generative pass rather than natural human digression.
 
 Each signal contributes a weighted 0-1 AI-likelihood score; the weighted average becomes an overall 0-100 score with a verdict band: likely-human (<35), uncertain (35-65), likely-ai-generated (>65).
 
@@ -37,9 +39,9 @@ Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one o
 
 Output: a formatted report with the overall score, verdict, the ruleset used, whether markdown was ignored, and a full breakdown of each signal's score and supporting detail, so the caller can see *why* the score landed where it did and disagree with individual signals.
 
-This module is intentionally extensible: each detector is an isolated function in a \`detectors\` array. Adding a new signal means adding one function and one array entry — no changes needed elsewhere. (A 7th, model-runner-based perplexity signal exists in the code but is currently disabled after investigation found it unreliable — see README.md's "Model runner (currently disabled)" section.)
+This module is intentionally extensible: each detector is an isolated file implementing the Detector interface, registered in src/lib/detectors/index.ts. Adding a new built-in signal means adding one file and one array entry — no changes needed elsewhere. (A 9th, model-runner-based perplexity signal exists in the code but is currently disabled after investigation found it unreliable — see README.md's "Model runner (currently disabled)" section.) Third parties can also add signals without forking the project at all, by dropping plugin files in a directory pointed to by the PLUGINS_DIR environment variable — see README.md's "Plugins" section.
 
-Rulesets (src/lib/detectAiUsage.ts, WEIGHT_PROFILES):
+Rulesets: each detector file owns its own per-genre weight (and, where relevant, its own calibration thresholds), keyed by "default" | "creative" | "strategic":
 - creative: assumes fiction/narrative prose. Sentence-length and readability variance are expected (burstiness and readability weights raised); markdown and em dashes are strongly out of place (markdown saturates fast; em dashes are tolerated more since they're a legitimate stylistic device, but still weighted).
 - strategic: assumes business documents, presentations, or marketing copy. Structured markdown (bullets/headers) is a normal genre convention, so its weight and saturation threshold are relaxed; punchy, uniform sentences are normal (burstiness weight lowered); AI stock-phrase frequency is weighted heaviest, since business buzzwords overlap heavily with known LLM tells.`,
 

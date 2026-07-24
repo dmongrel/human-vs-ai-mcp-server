@@ -16,6 +16,13 @@
         "MODEL_RUNNER_MODEL": "ai-detection-gutenberg-human-formatted-ai-v1-sft-qwen-3b-dpo",
         "MODEL_RUNNER_CONTEXT_TOKENS": "32767"
       }
+    },
+    "human-vs-ai-mcp-server-with-plugins": {
+      "command": "node",
+      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
+      "env": {
+        "PLUGINS_DIR": "/absolute/path/to/your/plugins"
+      }
     }
   }
 }

@@ -57,3 +57,13 @@ export function countSyllables(word: string): number {
 export function clamp(value: number, min = 0, max = 1): number {
   return Math.min(max, Math.max(min, value));
 }
+
+export function fleschReadingEase(text: string): number {
+  const sentences = splitSentences(text);
+  const words = tokenizeWords(text);
+  if (sentences.length === 0 || words.length === 0) return NaN;
+  const syllables = words.reduce((sum, w) => sum + countSyllables(w), 0);
+  const wordsPerSentence = words.length / sentences.length;
+  const syllablesPerWord = syllables / words.length;
+  return 206.835 - 1.015 * wordsPerSentence - 84.6 * syllablesPerWord;
+}
