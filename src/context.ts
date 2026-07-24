@@ -15,6 +15,8 @@ Both detect_ai_usage and humanize_text also accept an optional 'type': "creative
 
 Both tools also accept an optional 'ignoreMd' boolean: if true, literal '*', '_', and '#' characters are stripped before analysis, so legitimate use of those characters (e.g. chapter headers, emphasis) isn't flagged as an AI markdown artifact. '-' bullet lines are unaffected. Pass the same ignoreMd value to both tools when calling them on the same text.
 
+Both tools also support an optional real-perplexity signal via a local model runner (LM Studio, Ollama, etc.) — set the MODEL_RUNNER_URL environment variable when starting the server (not a per-call parameter) to activate it. Fully opt-in and localhost-only; omitted entirely when unset or unreachable.
+
 Call get_context with { "topic": "detect_ai_usage" } or { "topic": "humanize_text" } for details on each tool's scoring methodology and output shape.`,
 
   detect_ai_usage: `detect_ai_usage estimates the likelihood a text was AI-generated using explainable stylometric heuristics — it is NOT a trained classifier and should not be treated as a verdict.
@@ -26,22 +28,24 @@ Signals used (see src/lib/detectAiUsage.ts for implementation and research refer
 - Readability uniformity: variance in Flesch Reading Ease across paragraphs; very uniform readability suggests a single generative process.
 - Markdown-in-prose artifacts: bullet/header/bold markup left in what should be plain prose, a common copy-paste artifact from chat output.
 - Em dash overuse: frequency of the "—" character, a widely reported LLM stylistic tic (notably ChatGPT).
+- Model-runner perplexity (optional, 7th signal): a real perplexity check against whatever model is loaded on a local, OpenAI-compatible model runner (LM Studio, Ollama, etc.) — the actual GLTR/DetectGPT-style signal, not a stylometric proxy. Only active when MODEL_RUNNER_URL is set (an environment variable, not a tool parameter); silently omitted when unset, unreachable, or unsupported by the runner/model. See src/lib/modelRunner.ts.
 
 Each signal contributes a weighted 0-1 AI-likelihood score; the weighted average becomes an overall 0-100 score with a verdict band: likely-human (<35), uncertain (35-65), likely-ai-generated (>65).
 
-Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional.
+Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional. (Model-runner activation is via the MODEL_RUNNER_URL environment variable, not a tool input.)
 
-'type' selects a ruleset ("creative" or "strategic") that reweights the six signals and adjusts markdown/em-dash saturation thresholds for that genre — see the "Rulesets" section below. Omit it for genre-agnostic default weights.
+'type' selects a ruleset ("creative" or "strategic") that reweights the signals and adjusts markdown/em-dash saturation thresholds for that genre — see the "Rulesets" section below. Omit it for genre-agnostic default weights.
 
 'ignoreMd' strips literal '*', '_', and '#' characters before analysis, neutralizing the markdown-in-prose signal's header and bold-run counts (but not '-' bullet lines) — useful for manuscripts that legitimately use those characters for chapter headers or emphasis.
 
 Output: a formatted report with the overall score, verdict, the ruleset used, whether markdown was ignored, and a full breakdown of each signal's score and supporting detail, so the caller can see *why* the score landed where it did and disagree with individual signals.
 
-This module is intentionally extensible: each detector is an isolated function in a \`detectors\` array. Adding a new signal (e.g. a real perplexity check against a local model, n-gram repetition analysis) means adding one function and one array entry — no changes needed elsewhere.
+This module is intentionally extensible: each detector is an isolated function in a \`detectors\` array. Adding a new signal means adding one function and one array entry — no changes needed elsewhere; the model-runner signal is a working example of this.
 
 Rulesets (src/lib/detectAiUsage.ts, WEIGHT_PROFILES):
 - creative: assumes fiction/narrative prose. Sentence-length and readability variance are expected (burstiness and readability weights raised); markdown and em dashes are strongly out of place (markdown saturates fast; em dashes are tolerated more since they're a legitimate stylistic device, but still weighted).
-- strategic: assumes business documents, presentations, or marketing copy. Structured markdown (bullets/headers) is a normal genre convention, so its weight and saturation threshold are relaxed; punchy, uniform sentences are normal (burstiness weight lowered); AI stock-phrase frequency is weighted heaviest, since business buzzwords overlap heavily with known LLM tells.`,
+- strategic: assumes business documents, presentations, or marketing copy. Structured markdown (bullets/headers) is a normal genre convention, so its weight and saturation threshold are relaxed; punchy, uniform sentences are normal (burstiness weight lowered); AI stock-phrase frequency is weighted heaviest, since business buzzwords overlap heavily with known LLM tells.
+- The model-runner signal, when active, gets a flat additive 15% weight in every profile (the other weights are unchanged, so totals exceed 1.0 only in that case — the weighted-average math normalizes correctly regardless).`,
 
   humanize_text: `humanize_text reuses detect_ai_usage's signals to produce concrete, actionable recommendations for making text read more naturally human. It does not rewrite the text — the caller decides how to apply each suggestion.
 
@@ -52,6 +56,7 @@ Recommendation categories currently implemented (see src/lib/humanizeText.ts):
 - Chat-style markdown left in prose (bullets/headers) when the text otherwise reads as prose.
 - Overused em dashes, suggesting each "—" be replaced with a space-hyphen-space ( - ) or the sentence restructured.
 - Excessive hedging language ("it's worth noting", "arguably", etc.).
+- (Optional, when MODEL_RUNNER_URL is set) Text that scored unusually predictable to the configured local model. Reads the result off detectAiUsage's already-computed detectors array rather than calling the model runner a second time.
 
 Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — same shape as detect_ai_usage. If you called detect_ai_usage with a type and/or ignoreMd, pass the same values here for consistent recommendations.
 

@@ -41,9 +41,9 @@ const HUMANIZE_PROFILES: Record<"default" | DocumentType, HumanizeProfile> = {
   strategic: { sentenceCovThreshold: 0.2, readabilityStdevThreshold: 3, flagMarkdown: false, emDashPer1000Threshold: 0, hedgeCountThreshold: 2 },
 };
 
-export function humanizeText(text: string, type?: DocumentType, ignoreMd?: boolean): HumanizeReport {
+export async function humanizeText(text: string, type?: DocumentType, ignoreMd?: boolean): Promise<HumanizeReport> {
   const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
-  const detection = detectAiUsage(workingText, type);
+  const detection = await detectAiUsage(workingText, type);
   const profile = HUMANIZE_PROFILES[type ?? "default"];
   const sentences = splitSentences(workingText);
   const words = tokenizeWords(workingText);
@@ -119,6 +119,19 @@ export function humanizeText(text: string, type?: DocumentType, ignoreMd?: boole
       issue: "Excessive hedging language",
       suggestion: "Commit to direct statements where you have the evidence to do so; reserve hedges for genuine uncertainty.",
       evidence: `${hedgeMatches.length} hedging phrases found.`,
+    });
+  }
+
+  // Reads the already-computed model-runner perplexity signal off
+  // `detection.detectors` rather than calling scorePerplexity() again —
+  // unlike the other checks above (recomputed independently here for
+  // simplicity), this one is a network call and must not be duplicated.
+  const modelPerplexity = detection.detectors.find((d) => d.name === "model-runner perplexity");
+  if (modelPerplexity && modelPerplexity.score > 0.65) {
+    recommendations.push({
+      issue: "Text is unusually predictable to the configured local model",
+      suggestion: "Introduce more varied or surprising phrasing — the model found this text's word choices unusually easy to predict, which tends to correlate with AI generation.",
+      evidence: modelPerplexity.detail,
     });
   }
 

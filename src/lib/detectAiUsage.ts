@@ -21,11 +21,18 @@
 //   - Em dash overuse: frequency of the "—" character, a widely reported
 //     stylistic tic of LLM output (notably ChatGPT) as a default
 //     parenthetical/pause marker.
+//   - Model-runner perplexity (optional): a real perplexity check against
+//     whatever model is loaded on a local, OpenAI-compatible model runner
+//     (LM Studio, Ollama, etc.) — the actual GLTR/DetectGPT-style signal,
+//     rather than a stylometric proxy for it. Only active when
+//     MODEL_RUNNER_URL is configured; silently omitted otherwise. See
+//     modelRunner.ts.
 //
 // Each detector is intentionally isolated so new signals can be added
 // without touching the others — see `detectors` array below.
 
 import { AI_TELL_PHRASES, countAiTellPhrases } from "./aiPhrases.js";
+import { scorePerplexity } from "./modelRunner.js";
 import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 export type DocumentType = "creative" | "strategic";
@@ -64,12 +71,26 @@ interface WeightProfile {
   readability: number;
   markdown: number;
   emDash: number;
+  /** Weight for the optional model-runner perplexity signal, when active. */
+  modelPerplexity: number;
   /** Markdown line-density that saturates the markdown score at 1.0. Higher = more tolerant. */
   markdownDensitySaturation: number;
   /** Em dashes per 1000 words that saturates the em-dash score at 1.0. Higher = more tolerant. */
   emDashPer1000Saturation: number;
 }
 
+// modelPerplexity is a flat, additive 15% weight in every profile. The
+// original six weights are deliberately left unchanged (they still sum to
+// 1.0 on their own, matching today's behavior when the model runner is
+// unconfigured — the common case). When the 7th detector IS active, the raw
+// weights sum to 1.15; that's fine because `totalWeight` normalization in
+// detectAiUsage() already divides by the actual sum of active weights, so
+// the overall score stays mathematically correct either way — model
+// perplexity just ends up contributing ~13% of the blended score rather
+// than exactly 15%. This is a reasonable default, not a genre-tuned or
+// empirically calibrated split, same as every other weight/threshold in
+// this table. Worth revisiting once there's real-world data on how the
+// signal behaves per genre.
 const WEIGHT_PROFILES: Record<"default" | DocumentType, WeightProfile> = {
   default: {
     burstiness: 0.2,
@@ -78,6 +99,7 @@ const WEIGHT_PROFILES: Record<"default" | DocumentType, WeightProfile> = {
     readability: 0.15,
     markdown: 0.15,
     emDash: 0.15,
+    modelPerplexity: 0.15,
     markdownDensitySaturation: 0.25,
     emDashPer1000Saturation: 8,
   },
@@ -88,6 +110,7 @@ const WEIGHT_PROFILES: Record<"default" | DocumentType, WeightProfile> = {
     readability: 0.2,
     markdown: 0.15,
     emDash: 0.05,
+    modelPerplexity: 0.15,
     markdownDensitySaturation: 0.1, // fiction should have virtually no markdown
     emDashPer1000Saturation: 16, // em dashes are a legitimate stylistic device in prose
   },
@@ -98,6 +121,7 @@ const WEIGHT_PROFILES: Record<"default" | DocumentType, WeightProfile> = {
     readability: 0.15,
     markdown: 0.05, // bullets/headers are an expected genre convention
     emDash: 0.15,
+    modelPerplexity: 0.15,
     markdownDensitySaturation: 1.0,
     emDashPer1000Saturation: 6, // business prose rarely uses em dashes stylistically
   },
@@ -217,6 +241,31 @@ function emDashDetector(text: string, totalWords: number, profile: WeightProfile
   };
 }
 
+// Approximate perplexity -> AI-likelihood anchors: low perplexity means the
+// text was highly predictable to the model (AI-typical); high perplexity
+// means it was surprising (human-typical). These bounds are a reasonable
+// starting point, not empirically calibrated per model — like the rest of
+// this file's thresholds, they're explainable defaults meant to be tuned
+// with real-world data over time.
+const PERPLEXITY_AI_LIKE_ANCHOR = 8;
+const PERPLEXITY_HUMAN_LIKE_ANCHOR = 40;
+
+async function modelPerplexityDetector(text: string, profile: WeightProfile): Promise<DetectorResult | null> {
+  const result = await scorePerplexity(text);
+  if (!result) return null;
+  const { perplexity, chunksScored, chunksTotal } = result;
+  const score = clamp(1 - (perplexity - PERPLEXITY_AI_LIKE_ANCHOR) / (PERPLEXITY_HUMAN_LIKE_ANCHOR - PERPLEXITY_AI_LIKE_ANCHOR));
+  const coverageNote = chunksScored < chunksTotal
+    ? ` (partial coverage: ${chunksScored}/${chunksTotal} chunks scored before the time budget was reached)`
+    : ` (${chunksScored}/${chunksTotal} chunks scored)`;
+  return {
+    name: "model-runner perplexity",
+    weight: profile.modelPerplexity,
+    score,
+    detail: `Perplexity ${perplexity.toFixed(1)} against the configured local model${coverageNote}. Lower perplexity (text was more predictable to the model) suggests AI generation; this is approximate and depends heavily on which model is loaded.`,
+  };
+}
+
 export function fleschReadingEase(text: string): number {
   const sentences = splitSentences(text);
   const words = tokenizeWords(text);
@@ -227,7 +276,7 @@ export function fleschReadingEase(text: string): number {
   return 206.835 - 1.015 * wordsPerSentence - 84.6 * syllablesPerWord;
 }
 
-export function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: boolean): DetectionReport {
+export async function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: boolean): Promise<DetectionReport> {
   const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
   const trimmed = workingText.trim();
   const sentences = splitSentences(trimmed);
@@ -245,6 +294,9 @@ export function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: bool
     emDashDetector(trimmed, words.length, profile),
   ];
 
+  const modelPerplexity = await modelPerplexityDetector(trimmed, profile);
+  if (modelPerplexity) detectors.push(modelPerplexity);
+
   const totalWeight = detectors.reduce((a, d) => a + d.weight, 0);
   const weightedScore = detectors.reduce((a, d) => a + d.score * d.weight, 0) / totalWeight;
   const overallScore = Math.round(clamp(weightedScore) * 100);
@@ -261,7 +313,7 @@ export function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: bool
     sentenceCount: sentences.length,
     detectors,
     caveat:
-      "This is a heuristic, explainable estimate based on stylometric signals (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown artifacts, em dash overuse). It is not a trained classifier and can be wrong in both directions — treat it as a starting point for human review, not a verdict.",
+      "This is a heuristic, explainable estimate based on stylometric signals (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown artifacts, em dash overuse), plus an optional real perplexity check against a local model when MODEL_RUNNER_URL is configured. It is not a trained classifier and can be wrong in both directions — treat it as a starting point for human review, not a verdict.",
   };
 }
 

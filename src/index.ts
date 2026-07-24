@@ -47,7 +47,7 @@ server.registerTool(
   async ({ text, filePath, reportPath, type, ignoreMd }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = detectAiUsage(input, type, ignoreMd);
+    const report = await detectAiUsage(input, type, ignoreMd);
     const output = await deliverOutput(formatDetectionReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }
@@ -63,7 +63,7 @@ server.registerTool(
   async ({ text, filePath, reportPath, type, ignoreMd }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = humanizeText(input, type, ignoreMd);
+    const report = await humanizeText(input, type, ignoreMd);
     const output = await deliverOutput(formatHumanizeReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }

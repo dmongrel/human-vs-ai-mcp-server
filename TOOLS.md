@@ -17,9 +17,9 @@ Estimate the likelihood that text was AI-generated, using explainable stylometri
 
 **Output**: overall 0-100 AI-likelihood score, a verdict (`likely-human` / `uncertain` / `likely-ai-generated`), the ruleset used, whether markdown was ignored, and a per-signal breakdown (score, weight, explanation).
 
-**Signals** (see `src/lib/detectAiUsage.ts`): sentence-length burstiness, lexical diversity (rolling type-token ratio), AI stock-phrase frequency, readability uniformity across paragraphs, markdown-in-prose artifacts, em dash overuse. Each is an isolated function — add a new signal by adding one function and one entry in the `detectors` array.
+**Signals** (see `src/lib/detectAiUsage.ts`): sentence-length burstiness, lexical diversity (rolling type-token ratio), AI stock-phrase frequency, readability uniformity across paragraphs, markdown-in-prose artifacts, em dash overuse, and an optional 7th signal — a real perplexity check against a local model via `MODEL_RUNNER_URL` (see [Model runner (optional)](./README.md#model-runner-optional) in the README) — only included when configured and reachable. Each is an isolated function — add a new signal by adding one function and one entry in the `detectors` array. Note: `detectAiUsage` is `async` (it awaits the optional model-runner call); `humanize_text` and the tool handlers in `src/index.ts` await it accordingly.
 
-**Rulesets**: `type` selects a `WEIGHT_PROFILE` in `src/lib/detectAiUsage.ts` that reweights the six signals and adjusts two saturation thresholds (markdown density, em dashes per 1000 words):
+**Rulesets**: `type` selects a `WEIGHT_PROFILE` in `src/lib/detectAiUsage.ts` that reweights the signals and adjusts two saturation thresholds (markdown density, em dashes per 1000 words). The model-runner signal, when active, gets a flat additive 15% weight in every profile (the other six weights are unchanged, so the total exceeds 1.0 only in that case — the score's weighted-average math normalizes correctly either way):
 - `creative` — expects sentence/readability variance and near-zero markdown or em-dash use (both are strongly out of place in fiction); leans on burstiness, lexical diversity, and readability.
 - `strategic` — expects structured markdown (bullets/headers) and punchy, uniform sentences as normal genre convention; leans heavily on AI stock-phrase frequency (business buzzwords are the strongest tell).
 - omitted — the original genre-agnostic weights.
@@ -30,7 +30,7 @@ Get actionable recommendations for making AI-leaning text read more naturally hu
 
 **Input**: same shape as `detect_ai_usage` (`text` / `filePath`, plus optional `reportPath`, `type`, and `ignoreMd`). If you called `detect_ai_usage` with a `type` (and/or `ignoreMd`), pass the same values to `humanize_text` for consistent recommendations.
 
-**Output**: current AI-likelihood score, the ruleset used, whether markdown was ignored, plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, uniform readability across paragraphs, markdown left in prose, overused em dashes, excessive hedging). See `src/lib/humanizeText.ts`.
+**Output**: current AI-likelihood score, the ruleset used, whether markdown was ignored, plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, uniform readability across paragraphs, markdown left in prose, overused em dashes, excessive hedging, and — when `MODEL_RUNNER_URL` is configured — text that scored unusually predictable to the local model). See `src/lib/humanizeText.ts`. Note: reads the model-perplexity result off `detectAiUsage`'s already-computed `detectors` array rather than calling the model runner a second time.
 
 **Rulesets**: `type` selects a `HUMANIZE_PROFILE` in `src/lib/humanizeText.ts` mirroring the detector's intent — e.g. `strategic` skips the markdown-in-prose recommendation entirely (bullets are expected in business docs) and requires less sentence-length variance before flagging uniformity; `creative` tolerates more em dashes and readability drift before flagging.
 
@@ -51,6 +51,6 @@ Return detailed usage documentation for a tool, kept separate from the short `de
 - [x] `get_context` — implemented.
 - [x] `type` ruleset option (`creative` / `strategic`) on both `detect_ai_usage` and `humanize_text`.
 - [x] `ignoreMd` option on both tools to exclude `*`/`_`/`#` markup from analysis.
-- [x] Automated tests for the `detect_ai_usage` heuristics, `humanize_text` recommendations, the `type` rulesets, and `ignoreMd` (`src/lib/*.test.ts`, run via `npm test`).
+- [x] Optional 7th detector: real perplexity check against a local model runner (LM Studio, Ollama, etc.) via `MODEL_RUNNER_URL` — the one opt-in, localhost-only exception to this project's "minimal npm dependencies" convention (which is about package supply-chain risk, not network calls). Fails open when unconfigured/unreachable/unsupported. Confirmed against a real LM Studio instance: it fails open there specifically because LM Studio's `/v1/completions` always returns `logprobs: null` (a runner limitation, not a bug here) — see README's "Model runner (optional)" section for details. See `src/lib/modelRunner.ts`.
+- [x] Automated tests for the `detect_ai_usage` heuristics, `humanize_text` recommendations, the `type` rulesets, `ignoreMd`, and the model-runner detector (`src/lib/*.test.ts`, run via `npm test`; model-runner network calls are stubbed in tests, never real).
 - [x] Repo published to GitHub ([dmongrel/human-vs-ai-mcp-server](https://github.com/dmongrel/human-vs-ai-mcp-server)); npm publish still pending (see CLAUDE.md Conventions).
-- [ ] Additional detectors backed by a local/offline model (no external API calls planned — see README).
