@@ -1,0 +1,66 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { clamp, countSyllables, mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
+
+test("splitSentences splits on terminal punctuation followed by a capital/quote", () => {
+  const result = splitSentences("This is one. This is two! Is this three? Yes.");
+  assert.deepEqual(result, ["This is one.", "This is two!", "Is this three?", "Yes."]);
+});
+
+test("splitSentences collapses internal whitespace", () => {
+  const result = splitSentences("Line one.\n\nLine   two.");
+  assert.deepEqual(result, ["Line one.", "Line two."]);
+});
+
+test("splitParagraphs splits on blank lines and trims", () => {
+  const result = splitParagraphs("Para one.\n\n  Para two.  \n\n\nPara three.");
+  assert.deepEqual(result, ["Para one.", "Para two.", "Para three."]);
+});
+
+test("tokenizeWords lowercases and strips punctuation", () => {
+  assert.deepEqual(tokenizeWords("Hello, WORLD! It's fine."), ["hello", "world", "it's", "fine"]);
+});
+
+test("tokenizeWords returns empty array for no words", () => {
+  assert.deepEqual(tokenizeWords("... !! ??"), []);
+});
+
+test("mean of empty array is 0", () => {
+  assert.equal(mean([]), 0);
+});
+
+test("mean computes average", () => {
+  assert.equal(mean([1, 2, 3, 4]), 2.5);
+});
+
+test("stdev of fewer than 2 values is 0", () => {
+  assert.equal(stdev([5]), 0);
+  assert.equal(stdev([]), 0);
+});
+
+test("stdev computes population standard deviation", () => {
+  assert.equal(stdev([2, 4, 4, 4, 5, 5, 7, 9]), 2);
+});
+
+test("countSyllables handles short words as one syllable", () => {
+  assert.equal(countSyllables("a"), 1);
+  assert.equal(countSyllables("the"), 1);
+  assert.equal(countSyllables("cat"), 1);
+});
+
+test("countSyllables approximates multi-syllable words", () => {
+  assert.equal(countSyllables("banana"), 3);
+  assert.equal(countSyllables("elephant"), 3);
+});
+
+test("clamp restricts to [0,1] by default", () => {
+  assert.equal(clamp(-5), 0);
+  assert.equal(clamp(5), 1);
+  assert.equal(clamp(0.5), 0.5);
+});
+
+test("clamp respects custom bounds", () => {
+  assert.equal(clamp(150, 0, 100), 100);
+  assert.equal(clamp(-10, 0, 100), 0);
+});
