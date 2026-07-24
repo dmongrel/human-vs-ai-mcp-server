@@ -21,12 +21,17 @@
 //   - Em dash overuse: frequency of the "—" character, a widely reported
 //     stylistic tic of LLM output (notably ChatGPT) as a default
 //     parenthetical/pause marker.
-//   - Model-runner perplexity (optional): a real perplexity check against
-//     whatever model is loaded on a local, OpenAI-compatible model runner
-//     (LM Studio, Ollama, etc.) — the actual GLTR/DetectGPT-style signal,
-//     rather than a stylometric proxy for it. Only active when
-//     MODEL_RUNNER_URL is configured; silently omitted otherwise. See
-//     modelRunner.ts.
+//   - Model-runner perplexity: CURRENTLY DISABLED (see
+//     MODEL_PERPLEXITY_SIGNAL_ENABLED below and modelRunner.ts's module
+//     comment). Investigated as a real perplexity check against a local
+//     model runner (LM Studio, Ollama), but found unreliable in practice:
+//     (a) the verbatim-echo technique it relies on is structurally biased
+//     toward near-zero perplexity for any text the model successfully
+//     reproduces at temperature 0 (greedy decoding always picks its own
+//     argmax token), regardless of the text's actual content, and (b) it
+//     was impractically slow against every runner/model tested (LM Studio
+//     and Ollama alike). The client code is kept as groundwork in case a
+//     better scoring technique or runner support emerges later.
 //
 // Each detector is intentionally isolated so new signals can be added
 // without touching the others — see `detectors` array below.
@@ -250,7 +255,12 @@ function emDashDetector(text: string, totalWords: number, profile: WeightProfile
 const PERPLEXITY_AI_LIKE_ANCHOR = 8;
 const PERPLEXITY_HUMAN_LIKE_ANCHOR = 40;
 
+// Disabled — see the module comment above and modelRunner.ts for why.
+// Flip this back on (and re-enable the call site below) if a fix is found.
+const MODEL_PERPLEXITY_SIGNAL_ENABLED = false;
+
 async function modelPerplexityDetector(text: string, profile: WeightProfile): Promise<DetectorResult | null> {
+  if (!MODEL_PERPLEXITY_SIGNAL_ENABLED) return null;
   const result = await scorePerplexity(text);
   if (!result) return null;
   const { perplexity, chunksScored, chunksTotal } = result;

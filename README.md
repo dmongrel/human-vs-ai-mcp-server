@@ -16,7 +16,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 - [Installation](#installation)
 - [Usage](#usage)
 - [Tools](#tools)
-- [Model runner (optional)](#model-runner-optional)
+- [Model runner (currently disabled)](#model-runner-currently-disabled)
 - [Testing](#testing)
 - [Design principles](#design-principles)
 
@@ -95,39 +95,45 @@ Every analysis tool accepts input either as text passed directly (e.g. from an A
 
 ---
 
-## Model runner (optional)
+## Model runner (currently disabled)
 
-Both tools support an optional **7th detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — by calling out to a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). This is entirely opt-in and **localhost-only**: with nothing configured, the tools behave exactly as described above, with zero network calls.
+An optional **7th detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`MODEL_PERPLEXITY_SIGNAL_ENABLED = false` in `src/lib/detectAiUsage.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
 
-To enable it, set these environment variables in your MCP client config (see the `human-vs-ai-mcp-server-with-model-runner` entry in [example-mcp.json](./example-mcp.json)):
+### What was tried
 
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `MODEL_RUNNER_URL` | yes (to activate) | — | Base URL of your local model runner, e.g. `http://localhost:1234`. Unset ⇒ signal is skipped entirely. |
-| `MODEL_RUNNER_MODEL` | no | first model returned by `GET /v1/models` | Pin a specific loaded model by name, instead of relying on the runner's model-listing order — useful when several models are loaded at once. |
-| `MODEL_RUNNER_TIMEOUT_MS` | no | `60000` | Overall time budget for scoring a document. Generation-based scoring (see below) is slow — this default assumes consumer hardware. |
-| `MODEL_RUNNER_CONTEXT_TOKENS` | no | conservative internal default | Set to the loaded model's actual context window (e.g. `32000`) to size chunks more efficiently — fewer, larger requests instead of many small ones. Optional: the default is safe on virtually any model's context, just less efficient on large-context ones. |
+The "obvious" approach — `POST /v1/completions` with `echo: true, logprobs: 1`, reading the input text's own token logprobs straight back — was tested against real LM Studio and Ollama instances and found non-functional on both: their OpenAI-compat `/v1/completions` implementations accept the `logprobs` parameter but never populate it in the response, regardless of value. `/v1/chat/completions` *does* return real logprobs on both runners, but only for tokens the model generates itself (no `echo` support).
 
-### How scoring works
+As a workaround, a **verbatim-echo** technique was implemented: ask the model to repeat each text chunk back exactly via `/v1/chat/completions`, and read logprobs off its own reproduction, with a Levenshtein-based similarity check (≥90% match required) discarding any chunk where the reproduction diverges too far. This technique does work mechanically — verified end-to-end against real LM Studio and Ollama instances with several models producing exact-match reproductions and real logprobs:
 
-The whole document is scored (not sampled), split into sequential chunks sized to fit the model's context window, with results averaged across chunks. If the runner is unreachable, times out, or the model's response isn't trustworthy enough to use (see below), the signal is silently omitted and the other six signals carry the score, unaffected — this never blocks or fails a tool call.
-
-**Technique — verbatim-echo, not direct `echo`:** the "obvious" approach — `POST /v1/completions` with `echo: true, logprobs: 1`, reading the input text's own token logprobs straight back — was tested against a real LM Studio instance and found non-functional there: `/v1/completions` accepts the `logprobs` parameter but always returns `logprobs: null`, regardless of value or `max_tokens`. `/v1/chat/completions` *does* return real logprobs, but only for tokens the model generates itself (no `echo` support). So instead: the model is asked to repeat each chunk back verbatim via `/v1/chat/completions`, and logprobs are read off its own reproduction. A similarity check (Levenshtein-based, ≥90% match required) verifies the reproduction is trustworthy before using it — a bad or diverging echo is simply discarded per-chunk, never used to compute a misleading score.
-
-This means the model matters more than it would for a direct echo approach. Verified against a real LM Studio instance across several models:
-
-| Model | Result |
+| Model / Runner | Result |
 |---|---|
-| `meta-llama-3-8b-instruct` | Works — exact match, real logprobs, no reasoning overhead (~9s per ~500-word chunk) |
-| `ai-detection-gutenberg-human-formatted-ai-v1-sft-qwen-3b-dpo` | Works, faster (~5s per ~500-word chunk), exact match |
+| `meta-llama-3-8b-instruct` (LM Studio) | Works — exact match, real logprobs, no reasoning overhead (~9s per ~500-word chunk) |
+| `ai-detection-gutenberg-human-formatted-ai-v1-sft-qwen-3b-dpo` (LM Studio) | Works, faster (~5s per ~500-word chunk), exact match |
+| `llama3.1:8b` (Ollama) | Works, exact match, real logprobs — but ~52s for the same ~500-word chunk on this hardware |
 | `qwen2.5-0.5b-instruct` | Fails — doesn't reliably follow verbatim-repetition instructions; output diverges from input |
 | `google/gemma-4-12b-qat`, `qwen3.6-35b-a3b-mtp` | Fail — both route through an internal reasoning/"thinking" step that consumes the token budget before any real content is emitted |
 
-**Practical guidance:** use a capable instruct model that isn't a "thinking"/reasoning model by default. Small models may not follow the literal-repetition instruction reliably; reasoning models burn the budget on internal chain-of-thought before producing usable output. If your runner/model doesn't work well, the signal fails open safely either way — you just won't get the 7th signal.
+### Why it's disabled anyway
 
-Because this technique is generation-bound (the model must produce roughly as much output as it reads), it's meaningfully slower than a true single-pass echo would be — full coverage of a long manuscript can take longer than the default timeout allows, in which case the report transparently shows partial chunk coverage rather than failing.
+Two separate problems, found through this testing, rule the technique out as currently designed:
 
-Net effect: this signal currently fails open (silently omitted) against LM Studio as commonly configured. It's expected to work against runners whose OpenAI-compat layer implements `echo`+`logprobs` on `/v1/completions` correctly (Ollama has not yet been verified here) — if you hit this, it's a runner limitation, not a bug in this tool.
+1. **Structural validity problem.** The similarity check requires the model to decode at `temperature: 0` (greedy) to reliably reproduce the text verbatim. But greedy decoding, by definition, always picks the model's own argmax (highest-probability) token at each step — so *any* text a model successfully reproduces this way will show near-zero perplexity almost by construction, regardless of whether the original text was actually predictable. Testing on three different chapters of varied human-written prose all returned the identical result (`perplexity 1.0`, same overall score) despite very different content — confirming the signal doesn't discriminate between inputs at all; it just reflects "the model confidently reproduced its own greedy output," which it does for nearly anything coherent.
+2. **Impractically slow.** Generation-bound scoring (the model must produce roughly as much output as it reads) took 5-9 seconds per ~500-word chunk on LM Studio and ~52 seconds on Ollama in testing — full coverage of a real manuscript would take minutes to tens of minutes, or blow through any reasonable timeout with larger chunk sizes (see `MODEL_RUNNER_CONTEXT_TOKENS` below — a bigger context budget means fewer *but larger* chunks, which can make per-chunk latency worse rather than better on slow runners).
+
+Neither problem is fixable by picking a better model or runner — they're inherent to the verbatim-echo technique itself. Direct `/v1/completions echo+logprobs` (the approach that would avoid both problems) remains non-functional against every runner tested so far.
+
+### If you want to pick this back up
+
+The plumbing is intact — env vars, chunking, timeout handling, similarity verification, `modelRunner.test.ts` — set these in your MCP client config's `env` block to exercise it (see the `human-vs-ai-mcp-server-with-model-runner` entry in [example-mcp.json](./example-mcp.json)), then flip `MODEL_PERPLEXITY_SIGNAL_ENABLED` to `true` in `src/lib/detectAiUsage.ts`:
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `MODEL_RUNNER_URL` | yes | — | Base URL of your local model runner, e.g. `http://localhost:1234`. |
+| `MODEL_RUNNER_MODEL` | no | first model returned by `GET /v1/models` | Pin a specific loaded model by name. |
+| `MODEL_RUNNER_TIMEOUT_MS` | no | `60000` | Overall time budget for scoring a document. |
+| `MODEL_RUNNER_CONTEXT_TOKENS` | no | conservative internal default | Size chunks against the model's actual context window. |
+
+Other directions worth exploring instead, not yet tried here: llama.cpp's native server (the engine underneath both LM Studio and Ollama) has a documented `n_probs` parameter and ships a dedicated `llama-perplexity` CLI tool built for proper teacher-forced perplexity scoring — untested whether its HTTP server exposes prompt-token (not just generated-token) logprobs. vLLM is also known for complete OpenAI-compat logprobs+echo support but is heavier to set up. Note: Anthropic's API does not expose token logprobs at all, so Claude isn't an option here regardless of approach.
 
 ---
 

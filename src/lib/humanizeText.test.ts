@@ -182,35 +182,22 @@ afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
 });
 
-test("flags text that scores highly predictable to the configured local model", async () => {
+test("model-perplexity recommendation stays disabled even when the runner is configured and would succeed", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
+  let fetchCalled = false;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    fetchCalled = true;
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
     const body = JSON.parse(String(init?.body ?? "{}"));
     const chunk = body.messages?.[1]?.content ?? "";
-    // Very low (near-zero) negative logprobs -> low perplexity -> high AI-likelihood score.
+    // Very low (near-zero) negative logprobs -> would be low perplexity -> high AI-likelihood score, if enabled.
     return jsonResponse({
       choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -0.1 }, { logprob: -0.1 }, { logprob: -0.1 }] } }],
     });
   }) as typeof fetch;
 
   const report = await humanizeText("Some ordinary text to analyze for this test.");
-  const rec = findRecommendation(report, "Text is unusually predictable to the configured local model");
-  assert.ok(rec, "expected a model-perplexity recommendation");
-  assert.match(rec!.evidence, /Perplexity/);
-});
-
-test("does not call the model runner a second time for the recommendation (reuses detection.detectors)", async () => {
-  process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  let completionCalls = 0;
-  globalThis.fetch = (async (url: string, init?: RequestInit) => {
-    if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
-    completionCalls += 1;
-    const body = JSON.parse(String(init?.body ?? "{}"));
-    const chunk = body.messages?.[1]?.content ?? "";
-    return jsonResponse({ choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -3 }] } }] });
-  }) as typeof fetch;
-
-  await humanizeText("Some ordinary text to analyze for this test.");
-  assert.equal(completionCalls, 1, "expected exactly one completion call (from detectAiUsage), not a duplicate from humanizeText");
+  // Disabled — see MODEL_PERPLEXITY_SIGNAL_ENABLED in detectAiUsage.ts.
+  assert.equal(findRecommendation(report, "Text is unusually predictable to the configured local model"), undefined);
+  assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
 });

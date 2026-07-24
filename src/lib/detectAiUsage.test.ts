@@ -261,9 +261,11 @@ afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
 });
 
-test("model-runner perplexity detector is included and weighted when configured and available", async () => {
+test("model-runner perplexity detector stays disabled even when the runner is configured and would succeed", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
+  let fetchCalled = false;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    fetchCalled = true;
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
     const body = JSON.parse(String(init?.body ?? "{}"));
     const chunk = body.messages?.[1]?.content ?? "";
@@ -273,16 +275,15 @@ test("model-runner perplexity detector is included and weighted when configured 
   }) as typeof fetch;
 
   const report = await detectAiUsage(HUMAN_TEXT);
-  const detector = findDetector(report, "model-runner perplexity");
-  assert.ok(detector.weight > 0);
-  assert.match(detector.detail, /Perplexity/);
-  assert.equal(report.detectors.length, 7);
-  // Raw weights sum to 1.15 (not 1.0) with the 7th detector active — the
-  // overall score's weighted-average math normalizes by the actual total,
-  // so this is expected, not a bug. See the WEIGHT_PROFILES comment.
+  // Disabled via MODEL_PERPLEXITY_SIGNAL_ENABLED — see detectAiUsage.ts.
+  // Found unreliable in practice (structural bias + impractically slow
+  // against every runner/model tested); kept off, not removed, in case a
+  // fix is found later.
+  assert.equal(report.detectors.find((d) => d.name === "model-runner perplexity"), undefined);
+  assert.equal(report.detectors.length, 6);
+  assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.15) < 1e-9, `expected total weight 1.15 with 7 detectors, got ${totalWeight}`);
-  assert.ok(report.overallScore >= 0 && report.overallScore <= 100);
+  assert.ok(Math.abs(totalWeight - 1) < 1e-9);
 });
 
 test("model-runner perplexity detector is cleanly omitted when the runner is configured but unreachable", async () => {
