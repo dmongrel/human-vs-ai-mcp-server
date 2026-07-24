@@ -92,14 +92,14 @@ function aiPhraseDetector(lowerText: string, totalWords: number): DetectorResult
   const topHits = hits
     .sort((a, b) => b.count - a.count)
     .slice(0, 8)
-    .map((h) => `"${h.phrase}" x${h.count}`)
-    .join(", ");
+    .map((h) => `- "${h.phrase}" x${h.count}`)
+    .join("\n");
   return {
     name: "AI stock-phrase usage",
     weight: 0.25,
     score,
     detail: totalHits > 0
-      ? `${totalHits} hits (${per1000.toFixed(1)} per 1000 words) from a list of ${AI_TELL_PHRASES.length} known LLM stock phrases: ${topHits}.`
+      ? `${totalHits} hits (${per1000.toFixed(1)} per 1000 words) from a list of ${AI_TELL_PHRASES.length} known LLM stock phrases:\n${topHits}`
       : "No known LLM stock phrases detected.",
   };
 }
@@ -186,13 +186,15 @@ export function formatDetectionReport(report: DetectionReport): string {
   const lines: string[] = [];
   lines.push(`AI Usage Detection Report`);
   lines.push(`==========================`);
-  lines.push(`Overall AI-likelihood score: ${report.overallScore}/100 (${report.verdict})`);
+  lines.push(`Overall AI-likelihood score: ${report.overallScore}/100 (${report.verdict}) — 0 = reads as entirely human-written, 100 = reads as entirely AI-generated.`);
   lines.push(`Word count: ${report.wordCount}, Sentence count: ${report.sentenceCount}`);
   lines.push(``);
-  lines.push(`Signal breakdown:`);
+  lines.push(`Signal breakdown (each signal scored 0-100: 0 = strongly human-like on that signal, 100 = strongly AI-like on that signal):`);
   for (const d of report.detectors) {
     lines.push(`- [${Math.round(d.score * 100)}/100, weight ${d.weight}] ${d.name}`);
-    lines.push(`    ${d.detail}`);
+    for (const detailLine of d.detail.split("\n")) {
+      lines.push(`    ${detailLine}`);
+    }
   }
   lines.push(``);
   lines.push(`Caveat: ${report.caveat}`);
