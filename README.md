@@ -4,7 +4,9 @@
 
 **`human-vs-ai-mcp-server`** is a Model Context Protocol (MCP) server that gives AI agents tools to reason about AI-authored text: estimating whether a piece of text was AI-generated, and getting concrete recommendations for making AI-leaning text read more naturally human.
 
-Detection and recommendations are built on explainable, dependency-free stylometric heuristics (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown-in-prose artifacts, n-gram repetition, paragraph coherence) rather than an opaque trained classifier — every score comes with the reasoning behind it. Each signal is a pluggable, isolated module (`src/lib/detectors/`), and third parties can add their own via [plugins](#plugins) without forking the project. See [TOOLS.md](./TOOLS.md) for the full tool list and [`get_context`](./TOOLS.md#get_context) for in-depth methodology notes.
+Detection and recommendations are built on explainable, dependency-free stylometric heuristics (sentence-length burstiness, lexical diversity, known LLM stock phrases, readability uniformity, markdown-in-prose artifacts, n-gram repetition, paragraph coherence) rather than an opaque trained classifier — every score comes with the reasoning behind it. See [TOOLS.md](./TOOLS.md) for the full tool list and [`get_context`](./TOOLS.md#get_context) for in-depth methodology notes.
+
+**This is a plugin-based project at its core.** `detect_ai_usage`'s scoring isn't a monolithic algorithm — it's a weighted combination of independent signal modules, each implementing a shared `Detector` interface and contributing (or omitting) its own score. Every built-in signal is written against that same interface, so removing one, retuning one, or adding a new one never touches the others. That interface is also open to third parties: drop a plain `.js` file into a directory referenced by `PLUGINS_DIR` and the server auto-discovers and loads it at runtime, no fork required. See [Plugins](#plugins) below for the interface, a worked example, and the trust model.
 
 Written in TypeScript, it runs on Node.js using the stdio transport protocol, making it suitable for integration with any MCP-compatible client such as Claude Desktop or Claude Code.
 
@@ -110,7 +112,21 @@ interface Detector {
 }
 ```
 
-The built-in signals live under `src/lib/detectors/` and are registered in `src/lib/detectors/index.ts` — adding or removing a built-in signal touches only that directory.
+The built-in signals live under `src/lib/detectors/` and are registered in `src/lib/detectors/index.ts` — adding or removing a built-in signal touches only that directory:
+
+| File | Signal |
+|---|---|
+| `burstiness.ts` | Sentence-length variance (CoV) |
+| `lexicalDiversity.ts` | Rolling type-token ratio |
+| `aiPhrase.ts` | Known LLM stock-phrase frequency |
+| `readabilityUniformity.ts` | Flesch Reading Ease variance across paragraphs |
+| `markdownInProse.ts` | Bullets/headers/bold left in plain prose |
+| `emDash.ts` | Em dash ("—") frequency |
+| `ngramRepetition.ts` | Trigram (3-word sequence) diversity |
+| `paragraphCoherence.ts` | Adjacent-paragraph content-word cosine similarity |
+| `modelPerplexity.ts` | Real perplexity via a local model runner — **disabled by default**, see [below](#model-runner-currently-disabled) |
+
+Every one of these is a normal consumer of the same `Detector` interface described above — there's no special-cased "built-in" path a plugin can't also take.
 
 **Third-party plugins**, for anyone who wants to add a detector without forking the project: set the `PLUGINS_DIR` environment variable (in your MCP client config's `env` block) to a directory of plain **CommonJS `.js` files** — not TypeScript; this package ships compiled `commonjs` output and doesn't bundle a TypeScript compiler to compile plugins at runtime, and adding one would violate the project's minimal-dependencies convention. Each file should export a `Detector`-shaped object as `module.exports.detector`, `module.exports.default`, or `module.exports` itself:
 
