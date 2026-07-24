@@ -5,8 +5,8 @@
 // layer doesn't have.
 
 import { countAiTellPhrases } from "./aiPhrases.js";
-import { detectAiUsage } from "./detectAiUsage.js";
-import { mean, splitSentences, stdev, tokenizeWords } from "./text.js";
+import { detectAiUsage, fleschReadingEase } from "./detectAiUsage.js";
+import { mean, splitParagraphs, splitSentences, stdev, tokenizeWords } from "./text.js";
 
 export interface HumanizeRecommendation {
   issue: string;
@@ -61,6 +61,21 @@ export function humanizeText(text: string): HumanizeReport {
       suggestion: "If this text is meant to read as prose (an email, essay, article), convert bullet lists and headers into flowing sentences and paragraphs.",
       evidence: `${markdownBullets} bullet lines and ${markdownHeaders} header lines detected.`,
     });
+  }
+
+  const paragraphs = splitParagraphs(text);
+  if (paragraphs.length >= 3) {
+    const readabilityScores = paragraphs.map(fleschReadingEase).filter((s) => Number.isFinite(s));
+    if (readabilityScores.length >= 3) {
+      const sd = stdev(readabilityScores);
+      if (sd < 6) {
+        recommendations.push({
+          issue: "Uniform readability across paragraphs",
+          suggestion: "Let sentence complexity and word choice drift naturally between paragraphs instead of holding a single, even register throughout.",
+          evidence: `Flesch Reading Ease stdev across ${readabilityScores.length} paragraphs: ${sd.toFixed(1)} (very uniform).`,
+        });
+      }
+    }
   }
 
   const hedgeMatches = lowerText.match(/\b(it's worth noting|it should be noted|one might argue|arguably|in many ways|to some extent)\b/g) ?? [];

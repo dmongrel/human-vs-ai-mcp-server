@@ -139,7 +139,7 @@ function markdownInProseDetector(text: string): DetectorResult {
   };
 }
 
-function fleschReadingEase(text: string): number {
+export function fleschReadingEase(text: string): number {
   const sentences = splitSentences(text);
   const words = tokenizeWords(text);
   if (sentences.length === 0 || words.length === 0) return NaN;

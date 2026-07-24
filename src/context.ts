@@ -35,6 +35,7 @@ This module is intentionally extensible: each detector is an isolated function i
 Recommendation categories currently implemented (see src/lib/humanizeText.ts):
 - Overused AI stock phrases, with the specific phrases and counts found.
 - Uniform sentence length, when sentence-length variation is unusually low.
+- Uniform readability across paragraphs, when Flesch Reading Ease barely varies paragraph to paragraph.
 - Chat-style markdown left in prose (bullets/headers) when the text otherwise reads as prose.
 - Excessive hedging language ("it's worth noting", "arguably", etc.).
 

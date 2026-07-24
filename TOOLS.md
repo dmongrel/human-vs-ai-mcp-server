@@ -23,7 +23,7 @@ Get actionable recommendations for making AI-leaning text read more naturally hu
 
 **Input**: same shape as `detect_ai_usage` (`text` / `filePath`, plus optional `reportPath`).
 
-**Output**: current AI-likelihood score plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, markdown left in prose, excessive hedging). See `src/lib/humanizeText.ts`.
+**Output**: current AI-likelihood score plus a list of `{ issue, suggestion, evidence }` recommendations (overused AI stock phrases, uniform sentence length, uniform readability across paragraphs, markdown left in prose, excessive hedging). See `src/lib/humanizeText.ts`.
 
 ## `get_context`
 
@@ -40,6 +40,5 @@ Return detailed usage documentation for a tool, kept separate from the short `de
 - [x] `detect_ai_usage` — heuristic scoring implemented; open for new detectors (e.g. real perplexity via a local model, n-gram repetition analysis).
 - [x] `humanize_text` — heuristic recommendations implemented; open for new recommendation categories.
 - [x] `get_context` — implemented.
-- [x] Automated tests for the `detect_ai_usage` heuristics (`src/lib/*.test.ts`, run via `npm test`).
-- [ ] Automated tests for `humanize_text`.
+- [x] Automated tests for the `detect_ai_usage` heuristics and `humanize_text` recommendations (`src/lib/*.test.ts`, run via `npm test`).
 - [ ] Additional detectors backed by a local/offline model (no external API calls planned — see README).
