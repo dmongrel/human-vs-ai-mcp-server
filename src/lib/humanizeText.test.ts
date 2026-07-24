@@ -184,10 +184,14 @@ afterEach(() => {
 
 test("flags text that scores highly predictable to the configured local model", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const chunk = body.messages?.[1]?.content ?? "";
     // Very low (near-zero) negative logprobs -> low perplexity -> high AI-likelihood score.
-    return jsonResponse({ choices: [{ logprobs: { token_logprobs: [null, -0.1, -0.1, -0.1] } }] });
+    return jsonResponse({
+      choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -0.1 }, { logprob: -0.1 }, { logprob: -0.1 }] } }],
+    });
   }) as typeof fetch;
 
   const report = await humanizeText("Some ordinary text to analyze for this test.");
@@ -199,10 +203,12 @@ test("flags text that scores highly predictable to the configured local model", 
 test("does not call the model runner a second time for the recommendation (reuses detection.detectors)", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
   let completionCalls = 0;
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
     completionCalls += 1;
-    return jsonResponse({ choices: [{ logprobs: { token_logprobs: [null, -3] } }] });
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const chunk = body.messages?.[1]?.content ?? "";
+    return jsonResponse({ choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -3 }] } }] });
   }) as typeof fetch;
 
   await humanizeText("Some ordinary text to analyze for this test.");

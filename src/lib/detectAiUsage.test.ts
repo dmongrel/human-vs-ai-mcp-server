@@ -263,9 +263,13 @@ afterEach(() => {
 
 test("model-runner perplexity detector is included and weighted when configured and available", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  globalThis.fetch = (async (url: string) => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
-    return jsonResponse({ choices: [{ logprobs: { token_logprobs: [null, -3, -3, -3] } }] });
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const chunk = body.messages?.[1]?.content ?? "";
+    return jsonResponse({
+      choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -3 }, { logprob: -3 }, { logprob: -3 }] } }],
+    });
   }) as typeof fetch;
 
   const report = await detectAiUsage(HUMAN_TEXT);

@@ -104,15 +104,28 @@ To enable it, set these environment variables in your MCP client config (see the
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `MODEL_RUNNER_URL` | yes (to activate) | — | Base URL of your local model runner, e.g. `http://localhost:1234`. Unset ⇒ signal is skipped entirely. |
-| `MODEL_RUNNER_TIMEOUT_MS` | no | `20000` | Overall time budget for scoring a document. Consumer-hardware-friendly default — raise it on slower machines. |
+| `MODEL_RUNNER_MODEL` | no | first model returned by `GET /v1/models` | Pin a specific loaded model by name, instead of relying on the runner's model-listing order — useful when several models are loaded at once. |
+| `MODEL_RUNNER_TIMEOUT_MS` | no | `60000` | Overall time budget for scoring a document. Generation-based scoring (see below) is slow — this default assumes consumer hardware. |
+| `MODEL_RUNNER_CONTEXT_TOKENS` | no | conservative internal default | Set to the loaded model's actual context window (e.g. `32000`) to size chunks more efficiently — fewer, larger requests instead of many small ones. Optional: the default is safe on virtually any model's context, just less efficient on large-context ones. |
 
-The model is auto-detected via the runner's `GET /v1/models` (whichever model is loaded is used — no model-name config needed). A small, fast model is all this needs: **Qwen2.5-0.5B-Instruct** is recommended (available in both LM Studio's and Ollama's catalogs); GPT-2 (124M) — the model GLTR itself used for this exact purpose — works as an even lighter fallback.
+### How scoring works
 
-The whole document is scored (not sampled), split into sequential chunks to fit the model's context window, with results averaged across chunks. If the runner is unreachable, times out, or doesn't support the `echo`+`logprobs` completions shape this relies on, the signal is silently omitted and the other six signals carry the score, unaffected — this never blocks or fails a tool call.
+The whole document is scored (not sampled), split into sequential chunks sized to fit the model's context window, with results averaged across chunks. If the runner is unreachable, times out, or the model's response isn't trustworthy enough to use (see below), the signal is silently omitted and the other six signals carry the score, unaffected — this never blocks or fails a tool call.
 
-**Known compatibility gap — LM Studio:** as of testing, LM Studio's `/v1/completions` endpoint accepts the `logprobs` parameter (including `top_logprobs`) but always returns `logprobs: null` in the response, regardless of value or `max_tokens`. Its `/v1/chat/completions` endpoint does return real logprobs, but only for tokens the model generates itself — it has no `echo` support for scoring existing input text.
+**Technique — verbatim-echo, not direct `echo`:** the "obvious" approach — `POST /v1/completions` with `echo: true, logprobs: 1`, reading the input text's own token logprobs straight back — was tested against a real LM Studio instance and found non-functional there: `/v1/completions` accepts the `logprobs` parameter but always returns `logprobs: null`, regardless of value or `max_tokens`. `/v1/chat/completions` *does* return real logprobs, but only for tokens the model generates itself (no `echo` support). So instead: the model is asked to repeat each chunk back verbatim via `/v1/chat/completions`, and logprobs are read off its own reproduction. A similarity check (Levenshtein-based, ≥90% match required) verifies the reproduction is trustworthy before using it — a bad or diverging echo is simply discarded per-chunk, never used to compute a misleading score.
 
-A workaround was investigated — prompting the model to repeat a text chunk verbatim via `/v1/chat/completions` and reading logprobs off that generated echo instead — but testing against three differently-sized models on a real LM Studio instance (qwen2.5-0.5b-instruct, google/gemma-4-12b-qat, qwen3.6-35b-a3b-mtp) found it impractical across the board: the small model doesn't reliably follow verbatim-repetition instructions (the output diverges from the input), and both larger models route through an internal reasoning/"thinking" step by default that consumes most or all of the token budget before any real content is emitted, making per-chunk echo calls too slow and unreliable for scoring a full document. This wasn't a fluke of one model choice — it reflects how this LM Studio setup handles chat completions generally. The workaround was not implemented as a result.
+This means the model matters more than it would for a direct echo approach. Verified against a real LM Studio instance across several models:
+
+| Model | Result |
+|---|---|
+| `meta-llama-3-8b-instruct` | Works — exact match, real logprobs, no reasoning overhead (~9s per ~500-word chunk) |
+| `ai-detection-gutenberg-human-formatted-ai-v1-sft-qwen-3b-dpo` | Works, faster (~5s per ~500-word chunk), exact match |
+| `qwen2.5-0.5b-instruct` | Fails — doesn't reliably follow verbatim-repetition instructions; output diverges from input |
+| `google/gemma-4-12b-qat`, `qwen3.6-35b-a3b-mtp` | Fail — both route through an internal reasoning/"thinking" step that consumes the token budget before any real content is emitted |
+
+**Practical guidance:** use a capable instruct model that isn't a "thinking"/reasoning model by default. Small models may not follow the literal-repetition instruction reliably; reasoning models burn the budget on internal chain-of-thought before producing usable output. If your runner/model doesn't work well, the signal fails open safely either way — you just won't get the 7th signal.
+
+Because this technique is generation-bound (the model must produce roughly as much output as it reads), it's meaningfully slower than a true single-pass echo would be — full coverage of a long manuscript can take longer than the default timeout allows, in which case the report transparently shows partial chunk coverage rather than failing.
 
 Net effect: this signal currently fails open (silently omitted) against LM Studio as commonly configured. It's expected to work against runners whose OpenAI-compat layer implements `echo`+`logprobs` on `/v1/completions` correctly (Ollama has not yet been verified here) — if you hit this, it's a runner limitation, not a bug in this tool.
 

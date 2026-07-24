@@ -12,7 +12,9 @@
       "command": "node",
       "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
       "env": {
-        "MODEL_RUNNER_URL": "http://localhost:1234"
+        "MODEL_RUNNER_URL": "http://localhost:1234",
+        "MODEL_RUNNER_MODEL": "meta-llama-3-8b-instruct",
+        "MODEL_RUNNER_CONTEXT_TOKENS": "8000"
       }
     }
   }
