@@ -3,7 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { getContext } from "./context.js";
+import { getContext, setUpdateNotice } from "./context.js";
+import { checkForUpdate } from "./lib/checkUpdate.js";
 import { detectAiUsage, formatDetectionReport } from "./lib/detectAiUsage.js";
 import { humanizeText, formatHumanizeReport } from "./lib/humanizeText.js";
 import { deliverOutput, resolveInputText } from "./lib/io.js";
@@ -88,6 +89,13 @@ server.registerTool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Check for updates in the background — non-blocking, fail-open.
+  checkForUpdate().then((result) => {
+    if (result !== null && result.available) {
+      setUpdateNotice(result.latest);
+    }
+  });
 }
 
 main().catch((error) => {

@@ -4,19 +4,9 @@
       "command": "human-vs-ai-mcp-server",
       "args": []
     },
-    "human-vs-ai-mcp-server-bun": {
-      "command": "bun",
-      "args": ["run", "https://raw.githubusercontent.com/dmongrel/human-vs-ai-mcp-server/master/src/index.ts"]
-    },
-    "human-vs-ai-mcp-server-deno": {
-      "command": "deno",
-      "args": [
-        "run",
-        "--allow-env",
-        "--allow-read",
-        "--allow-write",
-        "https://raw.githubusercontent.com/dmongrel/human-vs-ai-mcp-server/master/src/index.ts"
-      ]
+    "human-vs-ai-mcp-server-local-build": {
+      "command": "node",
+      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"]
     }
   }
 }

@@ -1,13 +1,14 @@
 {
   "name": "human-vs-ai-mcp-server",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "MCP server for detecting AI-generated text and offering humanizing recommendations.",
   "main": "dist/index.js",
   "bin": {
     "human-vs-ai-mcp-server": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -24,5 +25,5 @@
     "@types/node": "^26.1.1",
     "typescript": "^5.5.3"
   },
-  "private": true
+  "private": false
 }

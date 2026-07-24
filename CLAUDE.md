@@ -8,7 +8,7 @@ An MCP (Model Context Protocol) server providing tooling to:
 - Detect AI usage in text (estimate likelihood a given text was AI-generated), with an explainable per-signal breakdown.
 - Offer recommendations to humanize AI-generated text.
 
-Published on GitHub at [dmongrel/human-vs-ai-mcp-server](https://github.com/dmongrel/human-vs-ai-mcp-server) (`master` is the default and only branch); not yet published to npm — see [README.md](./README.md) for install/usage and [TOOLS.md](./TOOLS.md) for the maintained tool reference.
+Published on GitHub at [dmongrel/human-vs-ai-mcp-server](https://github.com/dmongrel/human-vs-ai-mcp-server) (`master` is the default and only branch) and on npm as [`human-vs-ai-mcp-server`](https://www.npmjs.com/package/human-vs-ai-mcp-server) — see [README.md](./README.md) for install/usage and [TOOLS.md](./TOOLS.md) for the maintained tool reference.
 
 ## Commands
 

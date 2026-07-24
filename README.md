@@ -23,7 +23,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 
 ## Status
 
-This project is under active development and **not yet published to npm**. Clone and build it locally for now (see below); an npm release is planned once the tool set stabilizes.
+This project is published to npm as [`human-vs-ai-mcp-server`](https://www.npmjs.com/package/human-vs-ai-mcp-server).
 
 ## Installation
 
@@ -31,7 +31,15 @@ This project is under active development and **not yet published to npm**. Clone
 
 Install Node.js (LTS) from [nodejs.org](https://nodejs.org/), or via your platform's package manager. Verify with `node --version` and `npm --version`.
 
-### From source (current)
+### From npm (recommended)
+
+```bash
+npm install -g human-vs-ai-mcp-server
+```
+
+To update later: `npm update -g human-vs-ai-mcp-server`
+
+### From source
 
 ```bash
 git clone https://github.com/dmongrel/human-vs-ai-mcp-server.git
@@ -40,19 +48,24 @@ npm install
 npm run build
 ```
 
-### From npm (once published)
-
-```bash
-npm install -g human-vs-ai-mcp-server
-```
-
-To update later: `npm update -g human-vs-ai-mcp-server`
-
 ---
 
 ## Usage
 
-Add a configuration block to your MCP client's config file (e.g., `claude_desktop_config.json` or `.mcp.json`). See [example-mcp.json](./example-mcp.json) for all three run methods (npm global install, Bun, Deno) side by side — keep only the entry you need.
+Add a configuration block to your MCP client's config file (e.g., `claude_desktop_config.json` or `.mcp.json`). See [example-mcp.json](./example-mcp.json) for the global npm install and local-build entries side by side — keep only the entry you need.
+
+**From a global npm install (recommended):**
+
+```json
+{
+  "mcpServers": {
+    "human-vs-ai-mcp-server": {
+      "command": "human-vs-ai-mcp-server",
+      "args": []
+    }
+  }
+}
+```
 
 **From a local build:**
 
@@ -62,19 +75,6 @@ Add a configuration block to your MCP client's config file (e.g., `claude_deskto
     "human-vs-ai-mcp-server": {
       "command": "node",
       "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"]
-    }
-  }
-}
-```
-
-**From a global npm install (once published):**
-
-```json
-{
-  "mcpServers": {
-    "human-vs-ai-mcp-server": {
-      "command": "human-vs-ai-mcp-server",
-      "args": []
     }
   }
 }
