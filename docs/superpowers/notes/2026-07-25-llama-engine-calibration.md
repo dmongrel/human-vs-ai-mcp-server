@@ -1,7 +1,7 @@
 # llama-engine perplexity: calibration measurements
 
 **Date**: 2026-07-25
-**Status**: measured, anchors NOT yet changed, detector still `enabled: false`
+**Status**: measured; anchors applied (16 / 28) on user instruction; detector still `enabled: false`
 
 ## Setup
 
@@ -67,20 +67,23 @@ LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, random word sala
 
 ## Anchors
 
-The detector currently ships provisional, pre-measurement anchors of
+The detector originally shipped provisional, pre-measurement anchors of
 `PERPLEXITY_AI_LIKE_ANCHOR = 6` / `PERPLEXITY_HUMAN_LIKE_ANCHOR = 40`. Against the measurements
-above those are directionally correct but badly compressed: AI text maps to ~0.43 and human text
-to ~0.24, so both groups land below the 0.5 midpoint and the signal contributes far less
+above those were directionally correct but badly compressed: AI text mapped to ~0.43 and human
+text to ~0.24, so both groups landed below the 0.5 midpoint and the signal contributed far less
 separation than it actually has.
 
-Anchors of roughly **16 (AI-like) / 28 (human-like)** would fit this data, putting the observed
-boundary near the middle of the range. **They have not been applied.** With n=3 per group and a
-single author on each side, fitting anchors this tightly to six data points risks encoding the
-sample rather than the phenomenon.
+Anchors of **16 (AI-like) / 28 (human-like)** fit this data, putting the observed boundary near
+the middle of the range. **These have been applied**, on instruction, as a better-than-nothing
+working estimate — the previous values were not merely imprecise but actively compressed the
+signal. The caveat stands regardless: with n=3 per group and a single author on each side,
+anchors fitted this tightly to six data points may encode the sample rather than the phenomenon.
+`llamaEnginePerplexity.test.ts` pins the intent (measured AI range above 0.5, human range below),
+so drift fails loudly.
 
 ## Recommendation
 
-Do **not** flip `enabled: true` yet. The technique is validated; the threshold is not.
+Do **not** flip `enabled: true` yet. The technique is validated; the threshold is a working estimate from six samples.
 
 What would justify enabling it, in rough order of value per effort:
 

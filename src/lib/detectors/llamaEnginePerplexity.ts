@@ -22,15 +22,25 @@ const WEIGHT: Record<"default" | DocumentType, number> = {
   strategic: 0.15,
 };
 
-// PROVISIONAL, UNVALIDATED anchors. Perplexity is model-specific: a 1.5B model
-// reports much higher numbers than a 70B one on identical text, so these are
-// starting points to be replaced by measurement, not defaults to trust. Low
-// perplexity means the text was predictable to the model (AI-typical); high
-// means it surprised the model (human-typical). Interpolation is in log space
-// because perplexity is exponential in cross-entropy — the perceptual distance
-// from 5 to 10 is the same as from 10 to 20, not from 10 to 15.
-const PERPLEXITY_AI_LIKE_ANCHOR = 6;
-const PERPLEXITY_HUMAN_LIKE_ANCHOR = 40;
+// Anchors measured against **Qwen2.5-1.5B-Instruct.Q4_K_M** on 2026-07-25 —
+// see docs/superpowers/notes/2026-07-25-llama-engine-calibration.md. On that
+// sample, AI prose scored 15.81-19.33 and human prose 24.07-27.33, with no
+// overlap; these anchors bracket that boundary.
+//
+// Treat them as a working estimate, not a settled threshold. They come from
+// n=3 per group with a single author on each side, all of it dialogue-heavy
+// contemporary fantasy — enough to show the signal separates, not enough to
+// know how wide either distribution really is. They are also specific to that
+// model and quantization: a 70B model reports much lower perplexity on
+// identical text, so these numbers do not transfer. Re-measure before changing
+// the model this detector runs against.
+//
+// Low perplexity means the text was predictable to the model (AI-typical);
+// high means it surprised the model (human-typical). Interpolation is in log
+// space because perplexity is exponential in cross-entropy — the perceptual
+// distance from 5 to 10 is the same as from 10 to 20, not from 10 to 15.
+const PERPLEXITY_AI_LIKE_ANCHOR = 16;
+const PERPLEXITY_HUMAN_LIKE_ANCHOR = 28;
 
 /** Map a raw perplexity to a 0 (human-like) .. 1 (AI-like) detector score. Exported for testing. */
 export function perplexityToScore(perplexity: number): number {
@@ -60,7 +70,7 @@ export const llamaEnginePerplexityDetector: Detector = {
     return {
       name: "llama-engine perplexity",
       score: perplexityToScore(perplexity),
-      detail: `Teacher-forced perplexity ${perplexity.toFixed(1)} against the bundled llama.cpp engine${modelNote}${coverageNote}. Lower perplexity (the text was more predictable to the model) suggests AI generation. Absolute values are model-specific — this signal's calibration is provisional.`,
+      detail: `Teacher-forced perplexity ${perplexity.toFixed(1)} against the bundled llama.cpp engine${modelNote}${coverageNote}. Lower perplexity (the text was more predictable to the model) suggests AI generation. Absolute values are model-specific, and this signal's thresholds were calibrated against a 1.5B model on a small sample — treat it as corroborating evidence, not a verdict.`,
     };
   },
 };

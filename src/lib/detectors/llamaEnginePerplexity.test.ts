@@ -66,7 +66,8 @@ test("perplexityToScore reports high perplexity as human-like", () => {
 test("perplexityToScore decreases strictly between the anchors", () => {
   // Inside the anchor range the mapping must discriminate; outside it the
   // score saturates at 1 and 0 by design, so strictness only holds here.
-  const scores = [7, 10, 15, 25, 35].map(perplexityToScore);
+  // These values sit between the measured AI and human anchors (16 / 28).
+  const scores = [17, 19, 21, 24, 27].map(perplexityToScore);
   for (let i = 1; i < scores.length; i++) {
     assert.ok(scores[i] < scores[i - 1], `expected a lower score at index ${i}: ${scores.join(", ")}`);
   }
@@ -76,6 +77,18 @@ test("perplexityToScore never increases with perplexity, including outside the a
   const scores = [1, 3, 6, 12, 24, 48, 500].map(perplexityToScore);
   for (let i = 1; i < scores.length; i++) {
     assert.ok(scores[i] <= scores[i - 1], `score rose at index ${i}: ${scores.join(", ")}`);
+  }
+});
+
+test("the measured AI and human ranges land on opposite sides of the midpoint", () => {
+  // Observed on 2026-07-25 against Qwen2.5-1.5B-Instruct.Q4_K_M — see
+  // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md. This is what
+  // the anchors exist to achieve, so it should fail loudly if they drift.
+  for (const ppl of [15.81, 17.66, 19.33]) {
+    assert.ok(perplexityToScore(ppl) > 0.5, `AI-range perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
+  }
+  for (const ppl of [24.07, 25.1, 27.33]) {
+    assert.ok(perplexityToScore(ppl) < 0.5, `human-range perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
   }
 });
 

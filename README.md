@@ -209,7 +209,7 @@ Other directions worth exploring instead, not yet tried here: llama.cpp's native
 
 A second, independent perplexity signal — this one measuring perplexity properly. Where the model-runner path above asks a chat model to echo text back and reads logprobs off its own generation (which greedy decoding makes meaningless), this path does **teacher-forced** scoring: the actual text is fed through the model and the model's probability for each *real* next token is read directly. No generation step, so none of the structural bias. This is the same technique llama.cpp's own `llama-perplexity` CLI uses.
 
-**It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/llamaEnginePerplexity.ts`) — not because the technique is broken, but because the perplexity-to-score mapping hasn't been calibrated against real human and AI text yet. Perplexity values are model-specific and don't transfer between models, so the anchors in that file are provisional placeholders.
+**It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/llamaEnginePerplexity.ts`) — not because the technique is broken, but because its thresholds rest on a small sample. Perplexity values are also model-specific and don't transfer between models, so the anchors in that file are only meaningful against the model they were measured with.
 
 ### How it works
 
@@ -217,7 +217,9 @@ A small Go helper (`native/llama-engine/`, shipped prebuilt) loads llama.cpp's e
 
 The engine ships inside the package (as an `optionalDependency` installed only on matching platforms). **The model does not** — you supply your own `.gguf` file. GGUF is required; llama.cpp cannot read safetensors, and converting a model yourself is out of scope here. Community GGUF quantizations exist on Hugging Face for most popular models.
 
-Unlike the model-runner path, this signal demonstrably discriminates. Scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`, a famous Dickens opening returns a perplexity of 1.7, LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, and random word salad 4016 — roughly three orders of magnitude of spread. What remains unproven is where the human/AI boundary actually falls, which is exactly what calibration has to establish.
+Unlike the model-runner path, this signal demonstrably discriminates. Scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`, a famous Dickens opening returns a perplexity of 1.7, LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, and random word salad 4016 — roughly three orders of magnitude of spread.
+
+On a matched-sample comparison with the same model, three human excerpts scored 24.1-27.3 and three AI-written passages of the same genre and length scored 15.8-19.3, with no overlap. The detector's anchors (16 AI-like, 28 human-like) bracket that boundary. **That is three samples per side from one author each**, which is enough to show the signal separates and not enough to know how wide either distribution really is — which is why it ships disabled. Full measurements and caveats are in [`docs/superpowers/notes/2026-07-25-llama-engine-calibration.md`](./docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
 
 ### Configuration
 
@@ -238,7 +240,7 @@ Windows x64 only for now. On any other platform the optional dependency isn't in
 
 1. Build the native helper: `npm run build:native` (needs Go 1.26+ and PowerShell; downloads the pinned llama.cpp release).
 2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model and `LLAMA_ENGINE_HELPER_PATH` at `packages/win32-x64/llama-engine-helper.exe`.
-3. Score a corpus of known-human and known-AI prose, and replace `PERPLEXITY_AI_LIKE_ANCHOR`/`PERPLEXITY_HUMAN_LIKE_ANCHOR` in `src/lib/detectors/llamaEnginePerplexity.ts` with what you measure — recording which model they came from, since they don't transfer.
+3. Score a corpus of known-human and known-AI prose — ideally 15-20 human samples across distinct authors and genres, plus AI text from several models — and replace `PERPLEXITY_AI_LIKE_ANCHOR`/`PERPLEXITY_HUMAN_LIKE_ANCHOR` in `src/lib/detectors/llamaEnginePerplexity.ts` with what you measure, recording which model they came from. `~/.claude/scripts/llama-engine-score.js` is not shipped here, but the helper's JSON contract makes scoring a directory of files a short script.
 4. Flip `enabled` to `true` in that same file.
 
 ---
