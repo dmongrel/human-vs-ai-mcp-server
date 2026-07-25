@@ -20,10 +20,22 @@ import { getEngineModelPath, scorePerplexityViaEngine } from "../llamaEngine.js"
 import { clamp } from "../text.js";
 import type { Detector, DocumentType } from "./types.js";
 
+// The heaviest signal in the set (the stylometric detectors top out at 0.25).
+// It earns that: it is the only signal whose discrimination has actually been
+// measured rather than assumed, and it measures something the others can only
+// proxy for — how predictable the text was to a language model, rather than
+// surface statistics that correlate with that. On the calibration pair it was
+// one of only two signals pointing the right way; four of the stylometric ones
+// pointed the wrong way.
+//
+// Not differentiated by ruleset, unlike most detectors' weight tables, because
+// there is no per-genre data to differentiate on — the whole calibration
+// sample is dialogue-heavy fantasy prose. Split these once there is a reason
+// to.
 const WEIGHT: Record<"default" | DocumentType, number> = {
-  default: 0.15,
-  creative: 0.15,
-  strategic: 0.15,
+  default: 0.3,
+  creative: 0.3,
+  strategic: 0.3,
 };
 
 // Anchors measured against **Qwen2.5-1.5B-Instruct.Q4_K_M** on 2026-07-25 —
