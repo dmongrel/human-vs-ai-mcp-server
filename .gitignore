@@ -17,3 +17,6 @@ yarn-error.log*
 .mcp.json
 
 /HANDOFF.md
+
+# Downloaded llama.cpp release binaries + locally built native helper
+/native/llama-engine/.local/
