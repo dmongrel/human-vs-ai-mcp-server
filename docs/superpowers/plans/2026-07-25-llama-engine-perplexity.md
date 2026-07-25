@@ -49,7 +49,24 @@
 
 ---
 
-### Task 1: Go scaffold and purego ABI spike
+### Task 1: Go scaffold and purego ABI spike — ✅ DONE (commit `1e76391`)
+
+**Outcome:** the ABI workaround holds. Default params read back at their documented values
+(512 / 2048 / 512 / 1 / 0 / 0 / 4 / 4), confirming every offset; `llama_decode` returns full
+151936-wide logit vectors at *every* position, not just the last. Two corrections were needed
+and are already in `llama.go`:
+
+- Plain `syscall.LoadLibrary` cannot resolve `llama.dll`'s own ggml dependencies. Loading via
+  `LoadLibraryExW` with `LOAD_WITH_ALTERED_SEARCH_PATH` (absolute path required) fixes it.
+- ggml's compute backends are separate DLLs (`ggml-cpu-*.dll`, one per CPU feature level)
+  discovered by scanning the *running executable's* directory. That is right in the shipped
+  layout and wrong anywhere else. `loadLib` now calls `ggml_backend_load_all_from_path`
+  (exported from `ggml.dll`, not `ggml-base.dll`) with the resolved lib directory. Without it,
+  model loading fails with a bare "model load failed".
+- `LLAMA_ENGINE_LIB_DIR` was added as a dev/test override for that directory, since `go test`
+  runs the test binary from a temp directory. It is not part of the shipped config surface and
+  is not documented in the README.
+
 
 **Why this is first:** everything else depends on one unproven assumption. purego **does not support passing or returning C structs by value on `windows/amd64`** ([purego README](https://github.com/ebitengine/purego) — Windows amd64 supports only `SyscallN`/`NewCallback`), and `llama_decode`, `llama_batch_init`, `llama_model_load_from_file`, `llama_init_from_model` and `llama_batch_free` all take or return structs by value. The workaround relies on the Microsoft x64 calling convention: a struct whose size is not 1, 2, 4, or 8 bytes is passed as *a pointer to a caller-allocated copy*, and a struct return of that size is written through a hidden first pointer argument. Every struct involved here is well over 8 bytes, so plain `uintptr` pointer arguments reproduce the ABI exactly. This task proves that empirically before any other code is written against it.
 
@@ -507,7 +524,7 @@ git commit -m "feat(native): purego binding to libllama with verified windows/am
 
 ---
 
-### Task 2: Pure scoring logic (TDD, no model required)
+### Task 2: Pure scoring logic (TDD, no model required) — ✅ DONE (`3553c9e`)
 
 **Files:**
 - Create: `native/llama-engine/scoring.go`
@@ -757,7 +774,7 @@ git commit -m "feat(native): teacher-forced perplexity scoring math with unit te
 
 ---
 
-### Task 3: Helper JSON contract on stdin/stdout
+### Task 3: Helper JSON contract on stdin/stdout — ✅ DONE (`37823f7`)
 
 **Files:**
 - Modify: `native/llama-engine/main.go` (replace the Task 1 spike entirely)
@@ -1076,7 +1093,9 @@ git commit -m "feat(native): stdin/stdout JSON contract for the llama-engine hel
 
 ---
 
-### Task 4: Node client (`llamaEngine.ts`)
+### Task 4: Node client (`llamaEngine.ts`) — ✅ DONE (`ff4c65a`)
+
+**Correction:** tests inject via an exported `_internals.spawn` rather than patching `node:child_process`. Builtin module members are getter-only in current Node and cannot be reassigned the way `globalThis.fetch` can.
 
 **Files:**
 - Create: `src/lib/llamaEngine.ts`
@@ -1481,7 +1500,7 @@ git commit -m "feat: Node client for the bundled llama-engine perplexity helper"
 
 ---
 
-### Task 5: The detector
+### Task 5: The detector — ✅ DONE (`07efd49`)
 
 **Files:**
 - Create: `src/lib/detectors/llamaEnginePerplexity.ts`
@@ -1673,7 +1692,7 @@ git commit -m "feat: add the (disabled) llama-engine perplexity detector"
 
 ---
 
-### Task 6: Platform package and build script
+### Task 6: Platform package and build script — ✅ DONE (`b196e81`)
 
 **Files:**
 - Create: `packages/win32-x64/package.json`
@@ -1797,10 +1816,14 @@ try {
 }
 
 # The runtime DLLs must sit next to the helper: llama.go loads llama.dll from
-# the executable's own directory, and Windows resolves llama.dll's own ggml
-# dependencies from there too.
+# the executable's own directory and passes that same directory to
+# ggml_backend_load_all_from_path, which is where the per-CPU ggml-cpu-*.dll
+# backends are discovered.
+#
+# The filter is exact on llama.dll: the release also ships llama-cli-impl.dll,
+# llama-bench-impl.dll and a dozen other CLI-tool DLLs we have no use for.
 $Dlls = Get-ChildItem -Path $Extract -Recurse -Filter "*.dll" |
-    Where-Object { $_.Name -like "llama*.dll" -or $_.Name -like "ggml*.dll" }
+    Where-Object { $_.Name -eq "llama.dll" -or $_.Name -like "ggml*.dll" -or $_.Name -like "libomp*.dll" }
 if ($Dlls.Count -eq 0) { throw "no llama/ggml DLLs found in $Extract — check the release asset layout" }
 foreach ($dll in $Dlls) {
     Copy-Item -Path $dll.FullName -Destination $Dest -Force
@@ -1852,7 +1875,7 @@ git commit -m "build: stage the llama-engine helper into a win32-x64 platform pa
 
 ---
 
-### Task 7: Future-platforms documentation
+### Task 7: Future-platforms documentation — ✅ DONE (`edf21e5`)
 
 **Files:**
 - Create: `native/llama-engine/PLATFORMS.md`
@@ -1961,7 +1984,7 @@ git commit -m "docs: guidance for adding llama-engine platforms beyond win32-x64
 
 ---
 
-### Task 8: User-facing documentation
+### Task 8: User-facing documentation — ✅ DONE (`98345c1`)
 
 **Files:**
 - Modify: `README.md`
@@ -2105,7 +2128,7 @@ git commit -m "docs: document the bundled llama-engine perplexity detector"
 
 ---
 
-### Task 9: End-to-end verification and calibration handoff
+### Task 9: End-to-end verification and calibration handoff — ✅ DONE (`70ef365`), awaiting user decision on anchors
 
 This task produces no shipped behavior change — it produces the evidence needed to decide whether the detector can ever be enabled, plus a written record of the measurements.
 
@@ -2148,6 +2171,14 @@ git commit -m "docs: record llama-engine perplexity calibration measurements"
 ```
 
 ---
+
+## Bug found during execution
+
+`DecodeChunk` needed `llama_memory_clear` between chunks. Every chunk restarts at position 0,
+so a stale KV cache made `llama_decode` fail for every chunk after the first — those chunks were
+skipped and the helper still returned `ok: true`, silently scoring only a document's first
+`ctxSize` tokens. Fixed in `70ef365`, guarded by `TestEngineScoresEveryChunk`. Worth remembering
+that the failure mode was a *plausible-looking success*, not an error.
 
 ## Deferred / out of scope
 
