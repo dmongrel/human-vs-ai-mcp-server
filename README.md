@@ -20,7 +20,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 - [Tools](#tools)
 - [Plugins](#plugins)
 - [Model runner (currently disabled)](#model-runner-currently-disabled)
-- [Bundled engine perplexity (currently disabled)](#bundled-engine-perplexity-currently-disabled)
+- [Bundled engine perplexity](#bundled-engine-perplexity)
 - [Testing](#testing)
 - [Design principles](#design-principles)
 
@@ -165,7 +165,7 @@ module.exports.detector = {
 
 ## Model runner (currently disabled)
 
-An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/modelPerplexity.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
+An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **This signal is enabled**, unlike the model-runner one above — but it only does anything when `LLAMA_ENGINE_MODEL_PATH` points at a `.gguf` model. Unconfigured, it returns immediately, spawns no subprocess, and is simply absent from the report. Note that its thresholds rest on a small sample, and perplexity values are model-specific and don't transfer between models, so the anchors are only meaningful against the model they were measured with. Treat the signal as corroborating evidence rather than a verdict.
 
 ### What was tried
 
@@ -205,11 +205,11 @@ Other directions worth exploring instead, not yet tried here: llama.cpp's native
 
 ---
 
-## Bundled engine perplexity (currently disabled)
+## Bundled engine perplexity
 
 A second, independent perplexity signal — this one measuring perplexity properly. Where the model-runner path above asks a chat model to echo text back and reads logprobs off its own generation (which greedy decoding makes meaningless), this path does **teacher-forced** scoring: the actual text is fed through the model and the model's probability for each *real* next token is read directly. No generation step, so none of the structural bias. This is the same technique llama.cpp's own `llama-perplexity` CLI uses.
 
-**It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/llamaEnginePerplexity.ts`) — not because the technique is broken, but because its thresholds rest on a small sample. Perplexity values are also model-specific and don't transfer between models, so the anchors in that file are only meaningful against the model they were measured with.
+**This signal is enabled**, unlike the model-runner one above — but it only does anything when `LLAMA_ENGINE_MODEL_PATH` points at a `.gguf` model. Unconfigured, it returns immediately, spawns no subprocess, and is simply absent from the report. Its thresholds rest on a small sample, and perplexity values are model-specific and don't transfer between models, so the anchors in `src/lib/detectors/llamaEnginePerplexity.ts` are only meaningful against the model they were measured with. Treat the signal as corroborating evidence rather than a verdict.
 
 ### How it works
 
@@ -236,12 +236,24 @@ Setting these is not sufficient on its own — the detector is disabled in code.
 
 Windows x64 only for now. On any other platform the optional dependency isn't installed and the detector stays silent. See [`native/llama-engine/PLATFORMS.md`](./native/llama-engine/PLATFORMS.md) for what adding a platform involves — it is more than a recompile.
 
-### If you want to enable it
+### Turning it on
 
 1. Build the native helper: `npm run build:native` (needs Go 1.26+ and PowerShell; downloads the pinned llama.cpp release).
-2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model and `LLAMA_ENGINE_HELPER_PATH` at `packages/win32-x64/llama-engine-helper.exe`.
-3. Score a corpus of known-human and known-AI prose — ideally 15-20 human samples across distinct authors and genres, plus AI text from several models — and replace `PERPLEXITY_AI_LIKE_ANCHOR`/`PERPLEXITY_HUMAN_LIKE_ANCHOR` in `src/lib/detectors/llamaEnginePerplexity.ts` with what you measure, recording which model they came from. `~/.claude/scripts/llama-engine-score.js` is not shipped here, but the helper's JSON contract makes scoring a directory of files a short script.
-4. Flip `enabled` to `true` in that same file.
+2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model. Until this package is published, also set `LLAMA_ENGINE_HELPER_PATH` to `packages/win32-x64/llama-engine-helper.exe` - the platform package it would otherwise resolve isn't on npm yet.
+3. Keep `LLAMA_ENGINE_CTX_SIZE` at 512 if you're using the shipped anchors. They were measured at that chunk size, and changing it changes the numbers.
+
+**If you point it at a different model, re-measure.** Score a corpus of known-human and known-AI
+prose - ideally 15-20 human samples across distinct authors and genres, plus AI text from several
+models - and replace `PERPLEXITY_AI_LIKE_ANCHOR`/`PERPLEXITY_HUMAN_LIKE_ANCHOR` in
+`src/lib/detectors/llamaEnginePerplexity.ts` with what you measure, recording which model they
+came from. The helper's JSON contract makes scoring a directory of files a short script.
+
+### Cost
+
+Roughly 19 seconds per 1,500 tokens on CPU with a 1.5B model, plus about a second of model load
+per call - the helper is spawned fresh each time. That is fine for a chapter and impractical for
+a whole novel; `LLAMA_ENGINE_TIMEOUT_MS` bounds it, and on expiry the helper returns whatever
+chunks finished rather than failing.
 
 ---
 

@@ -1,16 +1,20 @@
-// Bundled-engine perplexity: CURRENTLY DISABLED (enabled: false below), but
-// for a different reason than ../modelPerplexity.ts. That one is disabled
-// because its technique is structurally broken; this one is disabled only
-// because its perplexity -> score mapping has not been calibrated against real
-// human and AI text yet. The measurement itself is sound — teacher-forced
-// scoring through libllama, exactly what llama.cpp's own llama-perplexity CLI
-// does, with no generation step and therefore no greedy-decoding bias.
+// Bundled-engine perplexity: ENABLED, unlike ../modelPerplexity.ts beside it.
+// That one is disabled because its technique is structurally broken (greedy
+// decoding makes its score independent of the input). This one measures
+// properly — teacher-forced scoring through libllama, exactly what llama.cpp's
+// own llama-perplexity CLI does, with no generation step and therefore no
+// decoding bias.
 //
-// To enable it you need: (1) empirical anchors from running the helper over a
-// corpus of known-human and known-AI prose with the model you intend to ship
-// against, replacing the provisional constants below, and (2) a documented
-// note in README.md recording which model those anchors came from — the
-// numbers are model-specific and don't transfer.
+// Being enabled costs nothing when unconfigured: run() returns null
+// immediately unless LLAMA_ENGINE_MODEL_PATH is set, so no subprocess is
+// spawned and the signal is simply absent from the report.
+//
+// Calibration caveat, worth knowing before trusting a score: the anchors below
+// were fitted to a deliberately small sample (see the constants). They
+// separate the measured groups cleanly, but they are one model's numbers from
+// one genre, and they do not transfer to a different .gguf. Treat this signal
+// as corroborating evidence rather than a verdict, and re-measure before
+// pointing LLAMA_ENGINE_MODEL_PATH at a different model.
 
 import { getEngineModelPath, scorePerplexityViaEngine } from "../llamaEngine.js";
 import { clamp } from "../text.js";
@@ -53,7 +57,7 @@ export function perplexityToScore(perplexity: number): number {
 export const llamaEnginePerplexityDetector: Detector = {
   id: "llama-engine-perplexity",
   name: "llama-engine perplexity",
-  enabled: false,
+  enabled: true,
   weight: (type) => WEIGHT[type],
   run: async (ctx) => {
     // Cheap guard: skip the spawn entirely when nothing is configured.

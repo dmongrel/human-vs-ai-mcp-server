@@ -27,8 +27,8 @@ function context(text: string): DetectorContext {
   };
 }
 
-test("the detector ships disabled until it is calibrated", () => {
-  assert.equal(llamaEnginePerplexityDetector.enabled, false);
+test("the detector is enabled", () => {
+  assert.equal(llamaEnginePerplexityDetector.enabled, true);
 });
 
 test("the detector is registered exactly once in CORE_DETECTORS", () => {
