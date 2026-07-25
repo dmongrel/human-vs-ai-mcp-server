@@ -7,6 +7,7 @@ import { aiPhraseDetector } from "./aiPhrase.js";
 import { burstinessDetector } from "./burstiness.js";
 import { emDashDetector } from "./emDash.js";
 import { lexicalDiversityDetector } from "./lexicalDiversity.js";
+import { llamaEnginePerplexityDetector } from "./llamaEnginePerplexity.js";
 import { loadPlugins } from "./loadPlugins.js";
 import { markdownInProseDetector } from "./markdownInProse.js";
 import { modelPerplexityDetector } from "./modelPerplexity.js";
@@ -23,6 +24,7 @@ export const CORE_DETECTORS: Detector[] = [
   markdownInProseDetector,
   emDashDetector,
   modelPerplexityDetector,
+  llamaEnginePerplexityDetector,
   ngramRepetitionDetector,
   paragraphCoherenceDetector,
 ];
