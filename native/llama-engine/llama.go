@@ -86,6 +86,8 @@ var (
 	llamaBatchFree            func(batch uintptr)
 	llamaDecode               func(ctx uintptr, batch uintptr) int32
 	llamaGetLogitsIth         func(ctx uintptr, i int32) *float32
+	llamaGetMemory            func(ctx uintptr) uintptr
+	llamaMemoryClear          func(mem uintptr, data bool)
 
 	ggmlBackendLoadAllFromPath func(dirPath string)
 )
@@ -173,6 +175,8 @@ func loadLib() error {
 	purego.RegisterLibFunc(&llamaBatchFree, lib, "llama_batch_free")
 	purego.RegisterLibFunc(&llamaDecode, lib, "llama_decode")
 	purego.RegisterLibFunc(&llamaGetLogitsIth, lib, "llama_get_logits_ith")
+	purego.RegisterLibFunc(&llamaGetMemory, lib, "llama_get_memory")
+	purego.RegisterLibFunc(&llamaMemoryClear, lib, "llama_memory_clear")
 
 	llamaBackendInit()
 	libLoaded = true
@@ -274,6 +278,15 @@ func (e *Engine) DecodeChunk(tokens []int32) (LogitsAt, error) {
 	if n > e.ctxSize {
 		return nil, fmt.Errorf("chunk of %d tokens exceeds context size %d", n, e.ctxSize)
 	}
+
+	// Every chunk is scored independently and starts again at position 0, so
+	// the KV cache from the previous chunk has to go. Without this, chunk 2
+	// tries to write positions the cache already holds and llama_decode fails
+	// with "failed to initialize batch" -- which the caller treats as a
+	// skipped chunk, silently scoring only the document's first ctxSize
+	// tokens. Clearing is also what makes each chunk's perplexity comparable:
+	// none of them get to condition on any earlier chunk.
+	llamaMemoryClear(llamaGetMemory(e.ctx), true)
 
 	var bb llamaBatch
 	bbPtr := uintptr(unsafe.Pointer(&bb))
