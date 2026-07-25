@@ -20,6 +20,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 - [Tools](#tools)
 - [Plugins](#plugins)
 - [Model runner (currently disabled)](#model-runner-currently-disabled)
+- [Bundled engine perplexity (currently disabled)](#bundled-engine-perplexity-currently-disabled)
 - [Testing](#testing)
 - [Design principles](#design-principles)
 
@@ -201,6 +202,44 @@ The plumbing is intact — env vars, chunking, timeout handling, similarity veri
 | `MODEL_RUNNER_CONTEXT_TOKENS` | no | conservative internal default | Size chunks against the model's actual context window. |
 
 Other directions worth exploring instead, not yet tried here: llama.cpp's native server (the engine underneath both LM Studio and Ollama) has a documented `n_probs` parameter and ships a dedicated `llama-perplexity` CLI tool built for proper teacher-forced perplexity scoring — untested whether its HTTP server exposes prompt-token (not just generated-token) logprobs. vLLM is also known for complete OpenAI-compat logprobs+echo support but is heavier to set up. Note: Anthropic's API does not expose token logprobs at all, so Claude isn't an option here regardless of approach.
+
+---
+
+## Bundled engine perplexity (currently disabled)
+
+A second, independent perplexity signal — this one measuring perplexity properly. Where the model-runner path above asks a chat model to echo text back and reads logprobs off its own generation (which greedy decoding makes meaningless), this path does **teacher-forced** scoring: the actual text is fed through the model and the model's probability for each *real* next token is read directly. No generation step, so none of the structural bias. This is the same technique llama.cpp's own `llama-perplexity` CLI uses.
+
+**It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/llamaEnginePerplexity.ts`) — not because the technique is broken, but because the perplexity-to-score mapping hasn't been calibrated against real human and AI text yet. Perplexity values are model-specific and don't transfer between models, so the anchors in that file are provisional placeholders.
+
+### How it works
+
+A small Go helper (`native/llama-engine/`, shipped prebuilt) loads llama.cpp's engine (`llama.dll`) directly via [purego](https://github.com/ebitengine/purego) — no cgo, no HTTP server, no separate installation. It runs as a one-shot subprocess: the server spawns it, writes one JSON request to its stdin, reads one JSON response from its stdout, and it exits. Nothing is left running.
+
+The engine ships inside the package (as an `optionalDependency` installed only on matching platforms). **The model does not** — you supply your own `.gguf` file. GGUF is required; llama.cpp cannot read safetensors, and converting a model yourself is out of scope here. Community GGUF quantizations exist on Hugging Face for most popular models.
+
+Unlike the model-runner path, this signal demonstrably discriminates. Scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`, a famous Dickens opening returns a perplexity of 1.7, LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, and random word salad 4016 — roughly three orders of magnitude of spread. What remains unproven is where the human/AI boundary actually falls, which is exactly what calibration has to establish.
+
+### Configuration
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `LLAMA_ENGINE_MODEL_PATH` | yes | — | Absolute path to a `.gguf` model file. Unset means the detector does nothing, at zero cost. |
+| `LLAMA_ENGINE_CTX_SIZE` | no | `2048` | Token window the text is split into. Larger windows score more context per pass but cost more memory and time. |
+| `LLAMA_ENGINE_TIMEOUT_MS` | no | `60000` | Overall time budget. On expiry the helper returns whatever chunks completed rather than failing. |
+| `LLAMA_ENGINE_HELPER_PATH` | no | resolved from the platform package | Development override pointing at a locally built helper binary. |
+
+Setting these is not sufficient on its own — the detector is disabled in code. See below.
+
+### Platform support
+
+Windows x64 only for now. On any other platform the optional dependency isn't installed and the detector stays silent. See [`native/llama-engine/PLATFORMS.md`](./native/llama-engine/PLATFORMS.md) for what adding a platform involves — it is more than a recompile.
+
+### If you want to enable it
+
+1. Build the native helper: `npm run build:native` (needs Go 1.26+ and PowerShell; downloads the pinned llama.cpp release).
+2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model and `LLAMA_ENGINE_HELPER_PATH` at `packages/win32-x64/llama-engine-helper.exe`.
+3. Score a corpus of known-human and known-AI prose, and replace `PERPLEXITY_AI_LIKE_ANCHOR`/`PERPLEXITY_HUMAN_LIKE_ANCHOR` in `src/lib/detectors/llamaEnginePerplexity.ts` with what you measure — recording which model they came from, since they don't transfer.
+4. Flip `enabled` to `true` in that same file.
 
 ---
 

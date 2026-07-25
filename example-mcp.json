@@ -17,6 +17,15 @@
         "MODEL_RUNNER_CONTEXT_TOKENS": "32767"
       }
     },
+    "human-vs-ai-mcp-server-with-llama-engine": {
+      "command": "node",
+      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
+      "env": {
+        "LLAMA_ENGINE_MODEL_PATH": "/absolute/path/to/your-model.gguf",
+        "LLAMA_ENGINE_CTX_SIZE": "2048",
+        "LLAMA_ENGINE_TIMEOUT_MS": "60000"
+      }
+    },
     "human-vs-ai-mcp-server-with-plugins": {
       "command": "node",
       "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
