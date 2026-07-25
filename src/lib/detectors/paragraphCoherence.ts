@@ -12,7 +12,15 @@ const WEIGHT: Record<"default" | DocumentType, number> = {
   strategic: 0.1,
 };
 
-const MIN_PARAGRAPHS = 3;
+const MIN_MEASURABLE_PARAGRAPHS = 3;
+
+// Cosine similarity between two very short paragraphs is not a measurement of
+// topic drift — a one-word line of dialogue shares no content words with
+// anything, so it contributes a similarity of ~0 regardless of what the text
+// is about. In narrative prose those lines are the majority, and including
+// them dragged the average toward zero for every document. Same threshold and
+// same reasoning as readabilityUniformity.ts.
+const MIN_PARAGRAPH_WORDS = 20;
 
 const STOPWORDS = new Set([
   "a", "an", "the", "and", "or", "but", "if", "then", "so", "because", "as", "of", "to", "in", "on",
@@ -58,20 +66,26 @@ export const paragraphCoherenceDetector: Detector = {
   enabled: true,
   weight: (type) => WEIGHT[type],
   run: (ctx) => {
-    if (ctx.paragraphs.length < MIN_PARAGRAPHS) {
-      return { name: "paragraph coherence", score: 0.5, detail: "Not enough paragraphs to measure topic drift reliably." };
-    }
-    const vectors = ctx.paragraphs.map(contentWordFrequency);
+    const measurable = ctx.paragraphs.filter((p) => p.split(/\s+/).filter(Boolean).length >= MIN_PARAGRAPH_WORDS);
+    // Omit the signal rather than reporting a number we did not measure. A
+    // fallback score here is not neutral: the orchestrator's weighted average
+    // has no concept of "unknown", so any value we return is asserted with
+    // this detector's full weight behind it.
+    if (measurable.length < MIN_MEASURABLE_PARAGRAPHS) return null;
+
+    const vectors = measurable.map(contentWordFrequency);
     const similarities: number[] = [];
     for (let i = 0; i + 1 < vectors.length; i++) {
       similarities.push(cosineSimilarity(vectors[i], vectors[i + 1]));
     }
     const avgSimilarity = similarities.reduce((a, b) => a + b, 0) / similarities.length;
     const score = clamp((avgSimilarity - HUMAN_LIKE_SIMILARITY) / (AI_LIKE_SIMILARITY - HUMAN_LIKE_SIMILARITY));
+    const skipped = ctx.paragraphs.length - measurable.length;
+    const skippedNote = skipped > 0 ? ` (${skipped} paragraph${skipped === 1 ? "" : "s"} too short to compare)` : "";
     return {
       name: "paragraph coherence",
       score,
-      detail: `Average adjacent-paragraph content-word similarity: ${avgSimilarity.toFixed(2)} across ${ctx.paragraphs.length} paragraphs. Unusually high similarity (staying tightly on-topic) suggests AI generation; natural digression suggests a human author.`,
+      detail: `Average adjacent-paragraph content-word similarity: ${avgSimilarity.toFixed(2)} across ${measurable.length} paragraphs${skippedNote}. Unusually high similarity (staying tightly on-topic) suggests AI generation; natural digression suggests a human author.`,
     };
   },
 };

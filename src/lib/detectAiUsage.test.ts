@@ -326,8 +326,53 @@ test("paragraph coherence detector scores low when paragraphs digress topically"
   assert.ok(detector.score < 0.5, `expected low coherence score for digressive human text, got ${detector.score}`);
 });
 
-test("paragraph coherence detector is neutral (0.5) with too few paragraphs", async () => {
+test("paragraph coherence detector is omitted with too few measurable paragraphs", async () => {
   const report = await detectAiUsage("Just one short paragraph here with no others to compare against.");
-  const detector = findDetector(report, "paragraph coherence");
-  assert.equal(detector.score, 0.5);
+  assert.equal(
+    report.detectors.find((d) => d.name === "paragraph coherence"),
+    undefined,
+    "a signal that could not be measured must be omitted, not reported as 0.5"
+  );
+});
+
+// --- Readability uniformity detector ---
+
+// Two ~32-word paragraphs with identical structure, so their Flesch scores
+// match almost exactly. Interleaved with the one-word dialogue lines that
+// dominate real narrative prose.
+const UNIFORM_PARAGRAPH_A =
+  "The system processes each request in the order it arrives and returns a result to the caller without any delay. The handler checks the input before it moves on to the next stage.";
+const UNIFORM_PARAGRAPH_B =
+  "The service handles every message in the order it appears and sends a response to the client without any pause. The worker reads the record before it hands off to the final step.";
+
+test("readability uniformity ignores short dialogue lines that would otherwise swamp the measurement", async () => {
+  const text = [UNIFORM_PARAGRAPH_A, '"Yes."', UNIFORM_PARAGRAPH_B, '"No."', UNIFORM_PARAGRAPH_A, '"Mm."', UNIFORM_PARAGRAPH_B].join("\n\n");
+  const report = await detectAiUsage(text);
+  const detector = findDetector(report, "readability uniformity");
+  // Flesch is unstable below ~20 words: a one-word line scores wildly, and
+  // including it makes uniform prose look varied.
+  assert.ok(detector.score > 0.8, `expected near-identical paragraphs to read as uniform, got ${detector.score}`);
+});
+
+test("readability uniformity is omitted when too few paragraphs are long enough to measure", async () => {
+  const text = [UNIFORM_PARAGRAPH_A, '"Yes."', '"No."', "Short line here.", UNIFORM_PARAGRAPH_B].join("\n\n");
+  const report = await detectAiUsage(text);
+  assert.equal(
+    report.detectors.find((d) => d.name === "readability uniformity"),
+    undefined,
+    "two measurable paragraphs is not enough to report a stdev"
+  );
+});
+
+test("readability uniformity still separates varied prose from uniform prose", async () => {
+  const varied = [
+    "Rain. Then nothing at all, for a long while, and then rain again, harder this time, the kind that gets into your shoes and stays there.",
+    "The epistemological ramifications of this position, insofar as they bear upon the antecedent question of referential opacity, remain substantially underdetermined by the available evidence.",
+    "She counted the change twice. Sixty cents. Not enough for the bus, and too far to walk before dark, so she sat down on the kerb to think about it.",
+  ].join("\n\n");
+  const uniform = [UNIFORM_PARAGRAPH_A, UNIFORM_PARAGRAPH_B, UNIFORM_PARAGRAPH_A].join("\n\n");
+
+  const variedScore = findDetector(await detectAiUsage(varied), "readability uniformity").score;
+  const uniformScore = findDetector(await detectAiUsage(uniform), "readability uniformity").score;
+  assert.ok(uniformScore > variedScore + 0.3, `expected a clear gap, got uniform ${uniformScore} vs varied ${variedScore}`);
 });

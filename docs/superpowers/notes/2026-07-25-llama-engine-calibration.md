@@ -97,6 +97,64 @@ What would justify enabling it, in rough order of value per effort:
 4. **Consider per-`DocumentType` anchors** if the genre spread turns out to matter, following the
    pattern the other detectors already use for their weight tables.
 
+## Follow-up: readability uniformity, and a fixture bug that hid it
+
+The first version of the human excerpts was extracted with `" ".join(words[...])`, which
+flattened every sample to a **single paragraph with no newlines**. Both paragraph-based detectors
+(`readabilityUniformity`, `paragraphCoherence`) hit their "not enough paragraphs" guard and
+returned their 0.5 fallback for all three human samples — which looked exactly like the
+detectors scoring human prose at 50 and AI prose at ~0, i.e. backwards. They were not. They were
+correctly reporting that they could not measure anything. Any per-signal comparison made against
+those flattened fixtures is void.
+
+Re-extracted with paragraph structure preserved (24-39 paragraphs per sample), two real findings
+emerged:
+
+**`readabilityUniformity` was measuring paragraph length, not register drift.** Flesch Reading
+Ease is a ratio of words-per-sentence and syllables-per-word; on a one-word line of dialogue
+("Mm.") both terms are meaningless, and narrative prose is mostly such lines. Unfiltered, the
+stdev landed at 20-29 for human and AI text alike and the score saturated at 0 for everything.
+Filtering to paragraphs of >= 20 words recovers a clean split:
+
+| | AI | human | gap |
+|---|---|---|---|
+| Flesch stdev, unfiltered | 20.8, 28.6, 23.8 | 26.1, 24.8, 22.5 | none (overlapping) |
+| Flesch stdev, >= 20 words | 8.6, 13.4, 11.3 | 21.1, 21.2, 21.3 | **+7.7** |
+
+20 words was the shortest threshold preserving separation, and the gap is widest at 20-25.
+Anchors set to 10 (uniform/AI) and 22 (varied/human). After the fix this is the *strongest*
+signal in the set on this corpus: human 7.0, AI 87.0.
+
+**`paragraphCoherence` does not discriminate on narrative prose.** Its premise is that AI text
+stays more tightly on-topic. Adjacent-paragraph cosine similarity does not bear that out here, at
+any paragraph-length filter:
+
+| filter | AI | human |
+|---|---|---|
+| unfiltered | 0.056, 0.057, 0.014 | 0.068, 0.060, 0.054 |
+| >= 30 words | 0.058, 0.067, 0.069 | 0.079, 0.062, 0.067 |
+| >= 60 words | 0.047, 0.086, 0.098 | 0.105, 0.082, 0.122 |
+
+Fully overlapping, and if anything human prose scores *higher* — the opposite of the premise. All
+observed values sit far below the detector's `AI_LIKE_SIMILARITY` anchor of 0.35, so it reports
+~0 for everything. Its anchors were deliberately **not** retuned: with no separation in the
+underlying statistic, spreading the output across 0-1 would amplify noise into a confident wrong
+signal. The detector still behaves correctly on its stated premise (synthetic paragraphs with
+heavy vocabulary overlap do score high) — the premise just doesn't hold for this genre.
+Recommend disabling or down-weighting it pending evidence from other genres.
+
+Both detectors also had a shared defect, fixed: they returned **0.5 when they could not measure
+anything**. The orchestrator's weighted average has no concept of "unknown", so 0.5 is not
+neutral — it asserts "50/100 AI-likelihood" with the detector's full weight. They now return
+`null`, which the contract already supports for exactly this case.
+
+### Aggregate effect
+
+| | human | AI | gap |
+|---|---|---|---|
+| before | 5.7 | 18.0 | 12.3 |
+| after | 6.7 | 30.0 | **23.3** |
+
 ## Note on a bug this exercise caught
 
 The first calibration run reported exactly 511 scored tokens for every ~1,500-token sample. Cause:
