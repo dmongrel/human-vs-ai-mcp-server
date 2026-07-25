@@ -197,7 +197,9 @@ test("model-perplexity recommendation stays disabled even when the runner is con
   }) as typeof fetch;
 
   const report = await humanizeText("Some ordinary text to analyze for this test.");
-  // Disabled — see MODEL_PERPLEXITY_SIGNAL_ENABLED in detectAiUsage.ts.
+  // The model-runner signal is disabled via `enabled: false` on the detector
+  // itself (src/lib/detectors/modelPerplexity.ts), so the orchestrator filters
+  // it out before run() and no request is ever made.
   assert.equal(findRecommendation(report, "Text is unusually predictable to the configured local model"), undefined);
   assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
 });
