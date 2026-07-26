@@ -68,8 +68,18 @@ test("stdev of fewer than 2 values is 0", () => {
   assert.equal(stdev([]), 0);
 });
 
-test("stdev computes population standard deviation", () => {
-  assert.equal(stdev([2, 4, 4, 4, 5, 5, 7, 9]), 2);
+test("stdev computes the sample standard deviation (Bessel's correction)", () => {
+  // Population stdev of this set is exactly 2; the sample estimate applies
+  // Bessel's correction, so it is 2 * sqrt(8/7).
+  const expected = 2 * Math.sqrt(8 / 7);
+  assert.ok(Math.abs(stdev([2, 4, 4, 4, 5, 5, 7, 9]) - expected) < 1e-12);
+});
+
+test("stdev is unbiased: small samples are not systematically low", () => {
+  // Dividing by n instead of n-1 understates spread, and worst at small n.
+  // Two points one apart have a sample stdev of exactly sqrt(2)/2 ~ 0.707;
+  // the population form would give 0.5.
+  assert.ok(Math.abs(stdev([0, 1]) - Math.SQRT2 / 2) < 1e-12);
 });
 
 test("countSyllables handles short words as one syllable", () => {

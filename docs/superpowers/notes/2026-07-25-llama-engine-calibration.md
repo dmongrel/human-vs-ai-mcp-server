@@ -182,6 +182,58 @@ narrative prose lands in "uncertain" by design — on this evidence that is the 
 not a threshold to tune away. Tightening further would start producing false positives on human
 prose, which is the more costly error for this tool.
 
+## Follow-up: readability uniformity's measurement floor
+
+Chapter-level testing of a fourth manuscript showed short chapters scoring as more
+"uniform" (more AI-like) than long ones from the same book. Two causes, measured across
+153 chapters of all four manuscripts by sliding a window of K consecutive scorable
+paragraphs and comparing the estimate to the ~20-paragraph samples the anchors were
+calibrated on:
+
+**1. `stdev` used the population form (divide by n).** Every caller measures a *sample* and
+infers spread from it, so the sample form (n-1) is the correct estimator. The population
+form understates spread, and understates it most on the smallest samples — exactly the
+short-chapter case:
+
+| K paragraphs | population (÷n) | sample (÷n-1) |
+|---|---|---|
+| 5 | 86% of the K=20 value | **94%** |
+| 8 | 93% | **97%** |
+| 10 | 95% | **98%** |
+| 12 | 97% | **99%** |
+
+Fixed in `text.ts`. This also affects `burstiness`, which takes a stdev over sentence
+lengths, but chapters have 50+ sentences where the correction is under 1%.
+
+**2. The floor was 3 paragraphs.** A stdev over three points is a number, not a
+measurement. Raised to **8**, where residual bias drops under ~3% (roughly 5 points of the
+0-100 score) while still scoring 96% of real chapters. Coverage falls off steeply above
+that — a floor of 10 silences 16% of chapters and 12 silences 26%, for about one further
+point of accuracy.
+
+**Effect on the six sampled chapters** — every stdev rose slightly and every readability
+score fell, but no verdict changed:
+
+| | ch01 | ch02 | ch03 | ch04 | ch05 | ch06 |
+|---|---|---|---|---|---|---|
+| stdev | 13.5→14.0 | 18.2→18.8 | 14.4→14.9 | 12.7→13.3 | 19.5→19.9 | 13.2→13.6 |
+| readability | 71→67 | 31→27 | 64→59 | 77→73 | 21→17 | 74→70 |
+| overall | 16→15 | 4→4 | 20→20 | 21→20 | 9→8 | 12→11 |
+
+**A correction to the reasoning that started this.** An earlier read of six chapters found
+a 0.905 correlation between paragraph count and stdev and concluded the signal was
+"tracking chapter length, not authorship". The window analysis does not support that
+strength of claim: between 13 and 20 paragraphs the bias is only ~3%, about 4 score
+points, nowhere near enough to explain ch04 at 77 against ch05 at 21. Those chapter-to-
+chapter differences are mostly real. The length effect is genuine but small, and n=6 was
+too few to separate it from actual variation in the writing.
+
+**Caveat on the method.** Sliding windows cross chapter boundaries, so they span more
+register change than a real chapter does and slightly overstate the stdev a chapter
+"should" show. It is the right instrument for measuring how the *estimator* behaves with
+sample size, which is what the floor depends on, but it is not a clean reference for what
+any individual chapter ought to score.
+
 ## Decision: document-level, calibrated for chapter-length input
 
 A per-chunk scoring mode was designed — split input into 1,200-word chunks, score each fully,

@@ -32,6 +32,18 @@ My grandmother used to keep a jar of buttons on the windowsill. Some were huge, 
 That shrug stuck with me longer than most advice I've gotten since. There's something to be said for holding onto things without a plan for them. My apartment now has three drawers I can't fully explain. A cracked teacup. Half a deck of cards from a hotel in Reno. A single glove.
 
 I don't think it's hoarding, exactly. It's more like leaving a door unlocked somewhere in your life, just in case a version of yourself you don't recognize yet needs to walk back in and grab something.
+
+The jar itself was ordinary. Thick glass, a dented tin lid that never quite sat straight, and a paper label soaked off decades before I was born, leaving a pale rectangle where the glue had been.
+
+She died in February, which felt like cheating, because February is already the worst month and now it had this too. We cleared the house over a long weekend and argued about almost everything in it.
+
+Nobody wanted the jar. That is not the same as nobody caring about it. My aunt picked it up twice and put it down twice, and on the second time she said something about the lid, and then she went and sat in the car for a while.
+
+So it came home with me, and it lived on a shelf for two years doing nothing at all, which I have decided is a legitimate thing for an object to do.
+
+Last spring a button came off my coat and I went to the jar without thinking, the way you reach for a light switch in a dark room you grew up in. It took me a long time to find one that matched, and when I did it was not a match at all, not really, just close enough that nobody but me would notice.
+
+I sewed it on anyway. I have thought about that a great deal since, and I still cannot decide whether it means anything, or whether I have simply inherited her habit of keeping what I cannot use.
 `;
 
 test("AI-stuffed text scores higher than varied human text", async () => {
@@ -385,12 +397,17 @@ const UNIFORM_PARAGRAPH_B =
   "The service handles every message in the order it appears and sends a response to the client without any pause. The worker reads the record before it hands off to the final step.";
 
 test("readability uniformity ignores short dialogue lines that would otherwise swamp the measurement", async () => {
-  const text = [UNIFORM_PARAGRAPH_A, '"Yes."', UNIFORM_PARAGRAPH_B, '"No."', UNIFORM_PARAGRAPH_A, '"Mm."', UNIFORM_PARAGRAPH_B].join("\n\n");
-  const report = await detectAiUsage(text);
+  // Eight near-identical paragraphs, enough to clear the measurement floor,
+  // interleaved with the one-word dialogue lines that dominate real narrative
+  // prose. Flesch is unstable below ~20 words: a one-word line scores wildly,
+  // and including it makes uniform prose look varied.
+  const pair = [UNIFORM_PARAGRAPH_A, UNIFORM_PARAGRAPH_B];
+  const blocks: string[] = [];
+  for (let i = 0; i < 8; i++) blocks.push(pair[i % 2], i % 2 === 0 ? '"Yes."' : '"Mm."');
+  const report = await detectAiUsage(blocks.join("\n\n"));
   const detector = findDetector(report, "readability uniformity");
-  // Flesch is unstable below ~20 words: a one-word line scores wildly, and
-  // including it makes uniform prose look varied.
   assert.ok(detector.score > 0.8, `expected near-identical paragraphs to read as uniform, got ${detector.score}`);
+  assert.match(detector.detail, /too short to score reliably/);
 });
 
 test("readability uniformity is omitted when too few paragraphs are long enough to measure", async () => {
@@ -404,12 +421,21 @@ test("readability uniformity is omitted when too few paragraphs are long enough 
 });
 
 test("readability uniformity still separates varied prose from uniform prose", async () => {
+  // Both samples clear the 8-paragraph floor, so the only thing that differs
+  // between them is how much the register moves.
   const varied = [
     "Rain. Then nothing at all, for a long while, and then rain again, harder this time, the kind that gets into your shoes and stays there.",
     "The epistemological ramifications of this position, insofar as they bear upon the antecedent question of referential opacity, remain substantially underdetermined by the available evidence.",
     "She counted the change twice. Sixty cents. Not enough for the bus, and too far to walk before dark, so she sat down on the kerb to think about it.",
+    "Notwithstanding the foregoing, the counterparty shall indemnify and hold harmless each affiliated entity against any liability arising howsoever from the aforementioned contingencies.",
+    "He ate the sandwich. It was a bad sandwich. He ate it anyway because it was there and because he had paid for it, which felt at the time like reason enough.",
+    "Consideration of the thermodynamic constraints imposed upon such a configuration necessitates a corresponding reevaluation of the assumptions underpinning the initial calculation.",
+    "The dog knew. Dogs always know. It stood in the hallway with its ears back and would not come when she called it, not once, not even for the good treats.",
+    "Insofar as any generalization may be ventured, the observed phenomena appear consistent with a mechanism whose particulars remain, for the present, imperfectly characterized.",
   ].join("\n\n");
-  const uniform = [UNIFORM_PARAGRAPH_A, UNIFORM_PARAGRAPH_B, UNIFORM_PARAGRAPH_A].join("\n\n");
+  const uniformBlocks: string[] = [];
+  for (let i = 0; i < 8; i++) uniformBlocks.push(i % 2 === 0 ? UNIFORM_PARAGRAPH_A : UNIFORM_PARAGRAPH_B);
+  const uniform = uniformBlocks.join("\n\n");
 
   const variedScore = findDetector(await detectAiUsage(varied), "readability uniformity").score;
   const uniformScore = findDetector(await detectAiUsage(uniform), "readability uniformity").score;

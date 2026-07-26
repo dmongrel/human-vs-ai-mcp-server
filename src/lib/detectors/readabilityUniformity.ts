@@ -25,7 +25,18 @@ const WEIGHT: Record<"default" | DocumentType, number> = {
 // Chosen as the shortest threshold that preserved a clean human/AI split on
 // the calibration corpus; the gap is widest at 20-25 words.
 const MIN_PARAGRAPH_WORDS = 20;
-const MIN_MEASURABLE_PARAGRAPHS = 3;
+
+// A stdev over three paragraphs is a number, not a measurement. Measured
+// across 153 chapters of four manuscripts, the estimate converges slowly with
+// paragraph count: relative to the ~20-paragraph samples the anchors below were
+// calibrated on, a window of 5 paragraphs reads 94% and 8 reads 97% (sample
+// stdev — the population form was far worse, which is why text.ts now applies
+// Bessel's correction). 8 is where the residual bias drops under ~3%, roughly 5
+// points of the 0-100 score, while still scoring 96% of real chapters; raising
+// it to 10 or 12 buys about one further point of accuracy but silences 16% and
+// 26% of chapters respectively. Below the floor the signal is omitted, not
+// guessed at.
+const MIN_MEASURABLE_PARAGRAPHS = 8;
 
 // Flesch stdev anchors, measured against the calibration corpus (see
 // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md for the corpus
