@@ -449,3 +449,19 @@ limitation found so far and it is not fixable by recalibration — it is what th
 Gutenberg is entirely pre-1930, so era is confounded with style throughout; the 12 contemporary
 chapters (19.6-28.6) are the only modern human data and they sit inside the Gutenberg range.
 Still one scoring model, one language, one excerpt per author.
+
+### Post-refit re-measurement of the AI samples
+
+The three AI chapters rescored under 6/30 (current build, `--type creative`):
+
+| author | perplexity | overall | verdict |
+|---|---|---|---|
+| llama-3-8b | 5.8 | 38 | uncertain |
+| qwen3-14b | 7.2 | 32 | uncertain |
+| Claude Opus 5 | 21.5 | **19** | **likely-human** |
+
+The frontier sample crossed the `likely-human` boundary (<20), having been 21/uncertain before.
+This is the anchor widening working as intended, not a regression: 21.5 sits mid-range among the
+25 novelists, so no threshold separates it without condemning real authors. Documented rather
+than tuned away, in README, `src/context.ts` and CLAUDE.md, since a user reading `likely-human`
+on AI text deserves to know the tool cannot see this class of output.

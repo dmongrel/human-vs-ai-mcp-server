@@ -278,14 +278,16 @@ Sampling mid-book is deliberate. Famous openings are partly memorized by the sco
 
 Detection difficulty scales with the model that wrote the text, and the gap is large enough to matter more than any threshold choice. Three AI chapters of the same genre and length, scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`:
 
-| Author | Perplexity | Overall score |
-|---|---|---|
-| llama-3-8b | 5.7 | 35 |
-| qwen3-14b | 7.2 | 32 |
-| Claude Opus 5 | 21.2 | 21 |
-| human chapters (n=12) | 19.6-28.6 | 6-22 |
+| Author | Perplexity | Overall score | Verdict |
+|---|---|---|---|
+| llama-3-8b | 5.8 | 38 | uncertain |
+| qwen3-14b | 7.2 | 32 | uncertain |
+| Claude Opus 5 | 21.5 | **19** | **likely-human** |
+| human authors (n=25) | 15.7-38.7 | — | — |
 
-Small and mid-size open models are three to four times more predictable than any human chapter measured, saturating the signal. Frontier output sits **inside** the human range, and no threshold separates it — on this signal, text from a frontier model is indistinguishable from human prose. Read a low score as "not written by a small local model", not as "written by a human".
+Small and mid-size open models are three to four times more predictable than any human writing measured, saturating the signal. Frontier output sits **inside** the human range, and no threshold separates it.
+
+Note what the last row of that table means in practice: **an AI-written chapter from a frontier model is reported as `likely-human`.** That is not a bug to tune away. Its perplexity of 21.5 sits in the middle of the 25-author human range, so any threshold that catches it also condemns a large share of real novelists — and false positives on human prose are the costlier error here. Read a low score as "shows none of the tells these heuristics look for", never as "written by a human".
 
 The 25-author corpus sharpened this. The signal only separates text below roughly 13 perplexity; above that, AI and human measurements interleave outright. Sherwood Anderson measures 15.71 and an AI-written excerpt measures 15.81 — they receive the same score, because on this measurement they are the same. Anchors tight enough to flag that excerpt also flagged seven of the 25 novelists, so the anchors gave way instead.
 
