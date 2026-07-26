@@ -1,7 +1,28 @@
-// Paragraph coherence: cosine similarity between adjacent paragraphs'
-// content-word (stopword-filtered) frequency vectors. Human writing tends to
-// digress or shift focus paragraph to paragraph; text generated in one pass
-// tends to stay unusually tightly on-topic throughout.
+// Paragraph coherence: CURRENTLY DISABLED (enabled: false below).
+//
+// The premise — human writing digresses paragraph to paragraph while text
+// generated in one pass stays unusually tightly on-topic — is not borne out by
+// measurement on narrative prose. Adjacent-paragraph content-word cosine
+// similarity does not separate human from AI text at any paragraph-length
+// filter, and if anything trends the wrong way:
+//
+//   filter        AI                     human
+//   unfiltered    0.056, 0.057, 0.014    0.068, 0.060, 0.054
+//   >= 30 words   0.058, 0.067, 0.069    0.079, 0.062, 0.067
+//   >= 60 words   0.047, 0.086, 0.098    0.105, 0.082, 0.122
+//
+// Every observed value also sits far below AI_LIKE_SIMILARITY (0.35), so the
+// detector reported ~0 for everything regardless. The anchors were deliberately
+// not retuned to the observed range: with no separation in the underlying
+// statistic, spreading the output across 0-1 would amplify noise into a
+// confident wrong signal.
+//
+// The implementation is kept, and still behaves correctly on its stated premise
+// (paragraphs with heavy vocabulary overlap do score high — see the tests), in
+// case the premise holds for genres this corpus doesn't cover: expository or
+// technical writing has longer, more topically-anchored paragraphs and may well
+// behave differently. Re-enabling means measuring on that genre first. See
+// docs/superpowers/notes/2026-07-25-llama-engine-calibration.md.
 
 import { clamp, tokenizeWords } from "../text.js";
 import type { Detector, DocumentType } from "./types.js";
@@ -63,7 +84,7 @@ const AI_LIKE_SIMILARITY = 0.35;
 export const paragraphCoherenceDetector: Detector = {
   id: "paragraph-coherence",
   name: "paragraph coherence",
-  enabled: true,
+  enabled: false,
   weight: (type) => WEIGHT[type],
   run: (ctx) => {
     const measurable = ctx.paragraphs.filter((p) => p.split(/\s+/).filter(Boolean).length >= MIN_PARAGRAPH_WORDS);

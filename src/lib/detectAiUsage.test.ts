@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
 import { detectAiUsage, formatDetectionReport, type DetectionReport } from "./detectAiUsage.js";
+import { CORE_DETECTORS } from "./detectors/index.js";
+import { paragraphCoherenceDetector } from "./detectors/paragraphCoherence.js";
+import type { DetectorContext } from "./detectors/types.js";
 
 function findDetector(report: DetectionReport, name: string) {
   const detector = report.detectors.find((d) => d.name === name);
@@ -49,13 +52,13 @@ test("overall score is within 0-100 and matches verdict bands", async () => {
   for (const text of [AI_STUFFED_TEXT, HUMAN_TEXT, "Short text."]) {
     const report = await detectAiUsage(text);
     assert.ok(report.overallScore >= 0 && report.overallScore <= 100);
-    if (report.overallScore < 35) assert.equal(report.verdict, "likely-human");
-    else if (report.overallScore > 65) assert.equal(report.verdict, "likely-ai-generated");
+    if (report.overallScore < 20) assert.equal(report.verdict, "likely-human");
+    else if (report.overallScore > 45) assert.equal(report.verdict, "likely-ai-generated");
     else assert.equal(report.verdict, "uncertain");
   }
 });
 
-test("returns all eight active named detectors (model-runner perplexity stays disabled)", async () => {
+test("returns all seven active named detectors (model-runner perplexity and paragraph coherence stay disabled)", async () => {
   const report = await detectAiUsage(HUMAN_TEXT);
   const names = report.detectors.map((d) => d.name).sort();
   assert.deepEqual(names, [
@@ -66,10 +69,9 @@ test("returns all eight active named detectors (model-runner perplexity stays di
     "lexical diversity",
     "em dash overuse",
     "n-gram repetition",
-    "paragraph coherence",
   ].sort());
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.2) < 1e-9, `weights should sum to 1.2, got ${totalWeight}`);
+  assert.ok(Math.abs(totalWeight - 1.1) < 1e-9, `weights should sum to 1.1, got ${totalWeight}`);
 });
 
 test("em dash detector scores high for heavy em dash use and reports no hits for clean text", async () => {
@@ -90,11 +92,11 @@ test("report echoes back the type used, defaulting to 'default'", async () => {
   assert.equal((await detectAiUsage(HUMAN_TEXT, "strategic")).type, "strategic");
 });
 
-test("all three rulesets produce weights that sum to 1.2", async () => {
+test("all three rulesets produce weights that sum to 1.1", async () => {
   for (const type of [undefined, "creative", "strategic"] as const) {
     const report = await detectAiUsage(HUMAN_TEXT, type);
     const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-    assert.ok(Math.abs(totalWeight - 1.2) < 1e-9, `${type ?? "default"} weights should sum to 1.2, got ${totalWeight}`);
+    assert.ok(Math.abs(totalWeight - 1.1) < 1e-9, `${type ?? "default"} weights should sum to 1.1, got ${totalWeight}`);
   }
 });
 
@@ -282,10 +284,10 @@ test("model-runner perplexity detector stays disabled even when the runner is co
   // (structural bias + impractically slow against every runner/model
   // tested); kept off, not removed, in case a fix is found later.
   assert.equal(report.detectors.find((d) => d.name === "model-runner perplexity"), undefined);
-  assert.equal(report.detectors.length, 8);
+  assert.equal(report.detectors.length, 7);
   assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.2) < 1e-9);
+  assert.ok(Math.abs(totalWeight - 1.1) < 1e-9);
 });
 
 // --- N-gram repetition detector ---
@@ -311,28 +313,44 @@ test("n-gram repetition detector is neutral (0.5) for too-short input", async ()
 });
 
 // --- Paragraph coherence detector ---
+//
+// Disabled (see the file's header comment: its premise does not hold for
+// narrative prose). Exercised directly rather than through detectAiUsage,
+// which filters on `enabled`, so the implementation stays covered while it is
+// switched off.
+
+function coherenceContext(text: string): DetectorContext {
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return { text, sentences: [text], paragraphs, words: text.split(/\s+/), lowerText: text.toLowerCase(), type: "default" };
+}
+
+test("paragraph coherence detector is registered but disabled", () => {
+  const detector = CORE_DETECTORS.find((d) => d.id === "paragraph-coherence");
+  assert.ok(detector, "expected the detector to remain registered");
+  assert.equal(detector!.enabled, false);
+});
+
+test("paragraph coherence is absent from a report while disabled", async () => {
+  const report = await detectAiUsage(HUMAN_TEXT);
+  assert.equal(report.detectors.find((d) => d.name === "paragraph coherence"), undefined);
+});
 
 test("paragraph coherence detector scores high when adjacent paragraphs share heavy vocabulary overlap", async () => {
   const paragraph = "The quarterly revenue growth strategy focuses on quarterly revenue growth across every market segment we serve. Quarterly revenue growth remains the primary quarterly revenue growth metric this year.";
-  const text = Array(4).fill(paragraph).join("\n\n");
-  const report = await detectAiUsage(text);
-  const detector = findDetector(report, "paragraph coherence");
-  assert.ok(detector.score > 0.5, `expected high coherence score for repeated-topic paragraphs, got ${detector.score}`);
+  const result = await paragraphCoherenceDetector.run(coherenceContext(Array(4).fill(paragraph).join("\n\n")));
+  assert.ok(result, "expected a result for four measurable paragraphs");
+  assert.ok(result!.score > 0.5, `expected high coherence score for repeated-topic paragraphs, got ${result!.score}`);
 });
 
 test("paragraph coherence detector scores low when paragraphs digress topically", async () => {
-  const report = await detectAiUsage(HUMAN_TEXT);
-  const detector = findDetector(report, "paragraph coherence");
-  assert.ok(detector.score < 0.5, `expected low coherence score for digressive human text, got ${detector.score}`);
+  const result = await paragraphCoherenceDetector.run(coherenceContext(HUMAN_TEXT.trim()));
+  assert.ok(result, "expected a result for three measurable paragraphs");
+  assert.ok(result!.score < 0.5, `expected low coherence score for digressive human text, got ${result!.score}`);
 });
 
 test("paragraph coherence detector is omitted with too few measurable paragraphs", async () => {
-  const report = await detectAiUsage("Just one short paragraph here with no others to compare against.");
-  assert.equal(
-    report.detectors.find((d) => d.name === "paragraph coherence"),
-    undefined,
-    "a signal that could not be measured must be omitted, not reported as 0.5"
-  );
+  const result = await paragraphCoherenceDetector.run(coherenceContext("Just one short paragraph here with no others to compare against."));
+  assert.equal(result, null, "a signal that could not be measured must be omitted, not reported as 0.5");
 });
 
 // --- Readability uniformity detector ---

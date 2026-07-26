@@ -165,7 +165,7 @@ module.exports.detector = {
 
 ## Model runner (currently disabled)
 
-An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **This signal is enabled**, unlike the model-runner one above — but it only does anything when `LLAMA_ENGINE_MODEL_PATH` points at a `.gguf` model. Unconfigured, it returns immediately, spawns no subprocess, and is simply absent from the report. Note that its thresholds rest on a small sample, and perplexity values are model-specific and don't transfer between models, so the anchors are only meaningful against the model they were measured with. Treat the signal as corroborating evidence rather than a verdict.
+An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/modelPerplexity.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
 
 ### What was tried
 

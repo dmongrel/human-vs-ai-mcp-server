@@ -1,7 +1,7 @@
 # llama-engine perplexity: calibration measurements
 
 **Date**: 2026-07-25
-**Status**: measured; anchors applied (16 / 28) on user instruction; detector still `enabled: false`
+**Status**: measured; anchors applied (16 / 28); detector enabled; weight 0.30. See the follow-up sections at the end for later changes to `readabilityUniformity`, `paragraphCoherence` and the verdict bands.
 
 ## Setup
 
@@ -83,9 +83,9 @@ so drift fails loudly.
 
 ## Recommendation
 
-Do **not** flip `enabled: true` yet. The technique is validated; the threshold is a working estimate from six samples.
+The technique is validated; the threshold is a working estimate from six samples. The detector was subsequently **enabled** on instruction, at weight 0.30. The work below still stands as what would turn that working estimate into a calibrated one:
 
-What would justify enabling it, in rough order of value per effort:
+In rough order of value per effort:
 
 1. **More human authors.** 15-20 samples from clearly distinct writers, ideally across genres.
    This is the single biggest gap — it establishes whether the human distribution is tight
@@ -153,7 +153,34 @@ neutral — it asserts "50/100 AI-likelihood" with the detector's full weight. T
 | | human | AI | gap |
 |---|---|---|---|
 | before | 5.7 | 18.0 | 12.3 |
-| after | 6.7 | 30.0 | **23.3** |
+| after readability fix | 6.7 | 30.0 | **23.3** |
+| after disabling coherence | 6-8 | 29-35 | **21** |
+
+## Follow-up: verdict bands
+
+`paragraphCoherence` was subsequently disabled (`enabled: false`) on the evidence above, and the
+verdict bands were recalibrated against three measured reference points:
+
+| text | score |
+|---|---|
+| human narrative prose | 6, 7, 8 |
+| AI narrative prose, well-written and style-matched | 29, 30, 35 |
+| AI text stuffed with stock phrases, markdown and uniform register | 50 |
+
+The previous bands (`<35` likely-human, `>65` likely-ai-generated) predated any measurement and
+were wrong in both directions:
+
+- **35 sat above the entire AI range**, so genuinely AI-written prose was reported as
+  "likely-human" — the worst failure mode this tool has.
+- **65 was effectively unreachable.** Burstiness, lexical diversity and em dash all return 0 even
+  for deliberately AI-stuffed text, capping real documents near 50. Nothing was ever going to be
+  called "likely-ai-generated".
+
+New bands: **likely-human <20, uncertain 20-45, likely-ai-generated >45.** Human samples clear the
+lower bound by 12 points and the stuffed-AI sample clears the upper bound. Well-written AI
+narrative prose lands in "uncertain" by design — on this evidence that is the honest answer, and
+not a threshold to tune away. Tightening further would start producing false positives on human
+prose, which is the more costly error for this tool.
 
 ## Note on a bug this exercise caught
 

@@ -20,6 +20,27 @@ import { clamp, splitParagraphs, splitSentences, stripMarkdownMarkup, tokenizeWo
 export type { DocumentType } from "./detectors/types.js";
 import type { DocumentType } from "./detectors/types.js";
 
+// Verdict bands, calibrated against measured scores rather than assumed ones
+// (see docs/superpowers/notes/2026-07-25-llama-engine-calibration.md):
+//
+//   human narrative prose            6-8
+//   AI narrative prose, well-written 29-35
+//   AI text stuffed with stock phrases, markdown and uniform register   50
+//
+// The previous bands (<35 / >65) predated any measurement and were wrong in
+// both directions. 35 sat *above* the AI range, so genuinely AI-written prose
+// was reported as "likely-human" — the worst possible failure for this tool.
+// 65 was effectively unreachable: several signals (burstiness, lexical
+// diversity, em dash) return 0 even for deliberately AI-stuffed text, which
+// caps real documents near 50, so nothing was ever going to be called
+// "likely-ai-generated".
+//
+// These are drawn from a small single-genre corpus. Well-written AI prose
+// lands in "uncertain" by design — on this evidence that is the honest answer,
+// not a threshold to tune away.
+const LIKELY_HUMAN_BELOW = 20;
+const LIKELY_AI_ABOVE = 45;
+
 export interface DetectionReport {
   overallScore: number; // 0-100, likelihood of AI generation
   verdict: "likely-human" | "uncertain" | "likely-ai-generated";
@@ -58,7 +79,7 @@ export async function detectAiUsage(text: string, type?: DocumentType, ignoreMd?
   const overallScore = Math.round(clamp(weightedScore) * 100);
 
   const verdict: DetectionReport["verdict"] =
-    overallScore < 35 ? "likely-human" : overallScore > 65 ? "likely-ai-generated" : "uncertain";
+    overallScore < LIKELY_HUMAN_BELOW ? "likely-human" : overallScore > LIKELY_AI_ABOVE ? "likely-ai-generated" : "uncertain";
 
   return {
     overallScore,
