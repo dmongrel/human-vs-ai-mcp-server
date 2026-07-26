@@ -1,26 +1,25 @@
-// Model-runner perplexity: ENABLED, but opt-in and inert unless
-// MODEL_RUNNER_URL is set. See ../modelRunner.ts's module comment and
-// README.md's "Model runner" section for the full investigation.
+// HTTP model-runner perplexity: DISABLED (enabled: false below).
 //
-// READ THIS BEFORE TRUSTING ITS NUMBER. The signal is mechanically
-// functional -- it reaches a local runner, gets real logprobs back, and
-// returns a perplexity -- but its scoring technique is known to be
-// structurally biased, and being enabled does not change that:
+// NOT the bundled engine. This talks to an *external* OpenAI-compatible
+// server (LM Studio, Ollama) over HTTP. The perplexity signal this project
+// actually uses is ../llamaEnginePerplexity.ts, which runs a llama.cpp
+// engine bundled with the package and does teacher-forced scoring. Both
+// "run a model", so they are easy to confuse — this is the one that is off.
 //
-//   (a) It reads logprobs off the model's own reproduction of the text.
-//       Reproduction runs at temperature 0, where greedy decoding always
-//       picks the model's argmax token, so the tokens it scores are
-//       near-certain by construction. Perplexity therefore collapses toward
-//       zero for any text the model reproduces successfully, largely
-//       independent of what the text actually says. Three differently-worded
-//       human chapters returned effectively identical values in testing.
-//   (b) It is slow against every runner tested, since it requires generating
-//       the whole text back.
+// It was briefly enabled and measured, which confirmed the original finding
+// rather than overturning it: it does reach a runner and return a number,
+// but that number is ~1.0 for essentially any text. Logprobs are read off
+// the model's own reproduction of the input, generated at temperature 0
+// where greedy decoding always picks its own argmax token — so the scored
+// tokens are near-certain by construction and the result barely depends on
+// what the text says. A real chapter measured 1.0; three differently-worded
+// human chapters returned effectively identical values. It is also slow,
+// since it must generate the entire text back.
 //
-// It is enabled because it works and is opt-in, not because the number is
-// sound. ../llamaEnginePerplexity.ts does teacher-forced scoring with no
-// generation step and is the perplexity signal to rely on. Treat this one's
-// output as diagnostic, and keep its weight low.
+// Not a calibration problem — it is the technique. The client code
+// (../modelRunner.ts) stays as groundwork in case a runner ever exposes
+// prompt-token logprobs directly, which would remove the generation step
+// and the bias with it. Do not flip this to true expecting a usable signal.
 
 import { scorePerplexity } from "../modelRunner.js";
 import { clamp } from "../text.js";
@@ -42,16 +41,23 @@ const PERPLEXITY_HUMAN_LIKE_ANCHOR = 40;
 export const modelPerplexityDetector: Detector = {
   id: "model-runner-perplexity",
   name: "model-runner perplexity",
-  enabled: true,
+  enabled: false,
   weight: (type) => WEIGHT[type],
   run: async (ctx) => {
     const result = await scorePerplexity(ctx.text);
     if (!result) return null;
-    const { perplexity, chunksScored, chunksTotal } = result;
+    const { perplexity, chunksScored, chunksTotal, timedOut } = result;
     const score = clamp(1 - (perplexity - PERPLEXITY_AI_LIKE_ANCHOR) / (PERPLEXITY_HUMAN_LIKE_ANCHOR - PERPLEXITY_AI_LIKE_ANCHOR));
-    const coverageNote = chunksScored < chunksTotal
-      ? ` (partial coverage: ${chunksScored}/${chunksTotal} chunks scored before the time budget was reached)`
-      : ` (${chunksScored}/${chunksTotal} chunks scored)`;
+    // Name the actual cause. Chunks go unscored either because the clock ran
+    // out or because the model's reproduction was rejected, and those call for
+    // opposite responses from the user — raise the timeout, versus load a
+    // model capable of echoing the text back.
+    const skipped = chunksTotal - chunksScored;
+    const coverageNote = skipped === 0
+      ? ` (${chunksScored}/${chunksTotal} chunks scored)`
+      : timedOut
+        ? ` (partial coverage: ${chunksScored}/${chunksTotal} chunks scored before MODEL_RUNNER_TIMEOUT_MS was reached — raise it to cover the whole text)`
+        : ` (partial coverage: ${chunksScored}/${chunksTotal} chunks scored; ${skipped} discarded because the model's reproduction diverged from the input or the request failed — a larger or more capable model echoes text back more reliably)`;
     return {
       name: "model-runner perplexity",
       score,

@@ -5,7 +5,7 @@
 // the helper feeds the actual tokens through libllama and reads the model's
 // probability for each real next token. No generation step, so none of the
 // greedy-decoding bias that made the HTTP technique non-discriminating (see
-// README.md's "Model runner (HTTP, opt-in)").
+// README.md's "HTTP model runner (disabled)").
 //
 // The helper is a one-shot subprocess: spawned per call, one JSON request on
 // stdin, one JSON response on stdout, gone. No daemon, no port, nothing left

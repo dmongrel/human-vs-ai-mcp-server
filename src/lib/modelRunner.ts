@@ -184,6 +184,14 @@ export interface PerplexityResult {
   perplexity: number;
   chunksScored: number;
   chunksTotal: number;
+  /**
+   * Whether the time budget actually ran out. A chunk can go unscored for two
+   * unrelated reasons — the deadline passed, or the model's reproduction was
+   * rejected/errored — and reporting the second as the first is misleading
+   * (it looks like a slow runner when it is really a model that cannot echo
+   * the text back). Callers should distinguish the two.
+   */
+  timedOut: boolean;
 }
 
 /**
@@ -213,9 +221,13 @@ export async function scorePerplexity(text: string, opts?: { timeoutMs?: number 
 
   const collectedLogprobs: number[] = [];
   let chunksScored = 0;
+  let timedOut = false;
 
   for (const chunk of chunks) {
-    if (Date.now() >= deadline) break;
+    if (Date.now() >= deadline) {
+      timedOut = true;
+      break;
+    }
     const remaining = deadline - Date.now();
     const logprobs = await scoreChunk(baseUrl, model, chunk, remaining);
     if (logprobs) {
@@ -229,5 +241,5 @@ export async function scorePerplexity(text: string, opts?: { timeoutMs?: number 
   const meanLogprob = collectedLogprobs.reduce((a, b) => a + b, 0) / collectedLogprobs.length;
   const perplexity = Math.exp(-meanLogprob);
 
-  return { perplexity, chunksScored, chunksTotal: chunks.length };
+  return { perplexity, chunksScored, chunksTotal: chunks.length, timedOut };
 }
