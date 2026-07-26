@@ -13,6 +13,9 @@
   "exports": {
     "./package.json": "./package.json"
   },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/check-native-package.js"
+  },
   "license": "MIT",
   "private": false
 }

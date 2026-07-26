@@ -8,8 +8,37 @@ on:
 permissions:
   contents: read
 
+# Two jobs, in this order, because the root package pins
+# human-vs-ai-mcp-server-win32-x64 at an exact version. Publishing the root
+# first leaves a window where every install resolves a dependency that does not
+# exist yet -- and since optionalDependencies fail open, that failure is silent:
+# users get no perplexity signal and no error saying why.
 jobs:
-  publish:
+  platform-win32-x64:
+    # Must be Windows. The helper is a Windows binary and build-win32-x64.ps1
+    # is a PowerShell script; there is no cross-compile path today (see
+    # native/llama-engine/PLATFORMS.md).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+      - run: npm install
+      # The binaries are gitignored build output, so a fresh checkout has none.
+      # Without this step the package publishes with only package.json+README.
+      - run: npm run build:native
+      - run: npm run check:native
+      - run: npm publish ./packages/win32-x64
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  root:
+    needs: platform-win32-x64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

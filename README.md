@@ -265,6 +265,30 @@ The comparison also disproves the obvious confound: qwen3-14b shares its lineage
 
 Setting `LLAMA_ENGINE_MODEL_PATH` is sufficient to activate the signal — the detector is enabled in code.
 
+### Publishing
+
+Two npm packages ship together: `human-vs-ai-mcp-server` (TypeScript, ~130 kB) and
+`human-vs-ai-mcp-server-win32-x64` (the prebuilt engine, ~24 MB), pinned to each other at an exact
+version. The platform package **must publish first** — the root pins it exactly, and because
+optional dependencies fail open, publishing out of order gives users an install that succeeds and
+silently has no perplexity signal.
+
+The native binaries are gitignored build output, so a fresh clone has none of them. Publishing
+that clone would produce a platform package containing only `package.json` and `README.md`, which
+also installs cleanly and silently does nothing. `npm run check:native` guards against exactly
+this (missing or empty binaries, no CPU backends staged, version drift from the pin) and runs both
+as a release step and as the platform package's own `prepublishOnly`.
+
+| command | does |
+|---|---|
+| `npm run check:native` | verify the platform package is publishable |
+| `npm run release:dry` | full ordered dry run, publishes nothing |
+| `npm run release` | build TS + native, check, publish platform, then publish root |
+
+Pushing a `v*` tag runs the same sequence in CI as two ordered jobs — the platform package builds
+on `windows-latest` (it needs Go and PowerShell), the root publishes on `ubuntu-latest` only after
+it succeeds.
+
 ### Platform support
 
 Windows x64 only for now. On any other platform the optional dependency isn't installed and the detector stays silent. See [`native/llama-engine/PLATFORMS.md`](./native/llama-engine/PLATFORMS.md) for what adding a platform involves — it is more than a recompile.
