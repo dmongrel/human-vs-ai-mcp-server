@@ -298,7 +298,10 @@ Detection difficulty scales with the model that wrote the text, and the gap is l
 | llama-3-8b | 5.8 | 38 | uncertain |
 | qwen3-14b | 7.2 | 32 | uncertain |
 | Claude Opus 5 | 21.5 | **19** | **likely-human** |
-| human authors (n=25) | 15.7-38.7 | — | — |
+| human authors (n=25) | 15.7-38.7 | not measured | not measured |
+| human chapters (n=12) | 19.6-28.6 | 6-22 | likely-human / uncertain |
+
+The 25-author corpus was scored for perplexity only, so it has no overall-score column; the overall range comes from the 12 contemporary chapters, which were measured across all signals.
 
 Small and mid-size open models are three to four times more predictable than any human writing measured, saturating the signal. Frontier output sits **inside** the human range, and no threshold separates it.
 
