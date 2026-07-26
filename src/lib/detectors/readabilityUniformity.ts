@@ -39,9 +39,26 @@ const MIN_PARAGRAPH_WORDS = 20;
 const MIN_MEASURABLE_PARAGRAPHS = 8;
 
 // Flesch stdev anchors, measured against the calibration corpus (see
-// docs/superpowers/notes/2026-07-25-llama-engine-calibration.md for the corpus
-// itself). Same caveat as every calibrated constant here: a small sample of
-// one genre, so treat the score as indicative rather than precise.
+// docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
+//
+// KNOWN OVERLAP — do not "fix" this by moving the anchors. Measured across 12
+// chapters from four manuscripts, human stdev runs 13.4-42.0 while three AI
+// chapters cluster at 13.3-13.9. VARIED_STDEV sits at the human *median*, so
+// roughly half of human chapters score above zero, and the lowest-variance
+// human chapter falls inside the AI cluster and is genuinely indistinguishable.
+//
+// Retuning was tried and does not help: lowering VARIED to 18 cuts the worst
+// human score from 72 to 58 but drops AI from ~70 to ~55, narrowing the gap
+// between group means rather than widening it. Raising VARIED raises every
+// score. The populations overlap; no anchor pair separates them.
+//
+// The signal still earns its weight on group means (human 20.8 vs AI ~70), but
+// it is the only signal producing false-positive pressure on human prose, so
+// treat a high score here as weak evidence on its own.
+//
+// Note the floor above was also suspected and cleared: the correlation between
+// measurable-paragraph count and score is +0.31, weakly *positive*, so short
+// chapters are not what inflates this.
 const UNIFORM_STDEV = 10; // AI-typical: register barely moves
 const VARIED_STDEV = 22; // human-typical: register drifts paragraph to paragraph
 

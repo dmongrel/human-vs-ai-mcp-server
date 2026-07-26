@@ -465,3 +465,46 @@ This is the anchor widening working as intended, not a regression: 21.5 sits mid
 25 novelists, so no threshold separates it without condemning real authors. Documented rather
 than tuned away, in README, `src/context.ts` and CLAUDE.md, since a user reading `likely-human`
 on AI text deserves to know the tool cannot see this class of output.
+
+## Follow-up: 12 chapters across all four manuscripts, post-refit
+
+Re-ran the full detector set over 12 human chapters — 3 evenly-spaced mid-book chapters from each
+of the four manuscripts, extracted with `~/.claude/scripts/extract-manuscript-chapters.js`. This is
+the cleanest human-side sample taken: multiple books, no hand-picking, first and last 10% of each
+book skipped.
+
+**11 of 12 `likely-human`; overall mean 8.2, range 1-20. Zero false positives.** Perplexity ran
+19.4-33.0, inside the 25-novelist range (15.7-38.7) and far above the local AI models (5.7-7.2).
+Under the previous 12/32 anchors the four chapters below perplexity 20 would have scored 43-47 on
+that signal instead of 26-27, so the refit is doing what it was meant to.
+
+Four signals returned 0 on all twelve (lexical diversity, em dash, n-gram repetition) or declined
+to score at all (burstiness, stock phrases, markdown). No dashes appear anywhere in ~13,000 words.
+
+### readabilityUniformity: the paragraph floor is not the problem
+
+The one chapter that read `uncertain` (Magic Hower ch11, overall 20) was pushed there entirely by
+readability uniformity at 72/100. The hypothesis was that its short length starved the estimate,
+and that `MIN_MEASURABLE_PARAGRAPHS = 8` was still too low. **Measured, and that is wrong**: the
+correlation between measurable-paragraph count and score is **r = +0.31** — weakly *positive*, the
+opposite of the predicted direction. Stars ch44 has only 8 measurable paragraphs and scores 0.
+
+The real cause is the anchors, and it is the same shape as the perplexity problem:
+
+| | Flesch stdev |
+|---|---|
+| AI samples (n=3) | 13.3, 13.5, 13.9 |
+| human chapters (n=12) | 13.4, 15.1, 16.9, 17.5, 18.1, 21.1, 22.0, 22.2, 23.1, 26.2, 26.2, 42.0 |
+
+`VARIED_STDEV = 22` sits at the **human median**, so half of all human chapters score above zero by
+construction. Worse, the human minimum (13.4) falls *inside* the AI cluster — that chapter is
+genuinely indistinguishable on this signal.
+
+Retuning was tested and does not help. Lowering `VARIED` to 18 drops the worst human score from 72
+to 58 but also drops AI from ~70 to ~55, leaving the group gap slightly narrower than it is now
+(49 -> 46). Raising `VARIED` raises every score. **Anchors left at 10/22**, because no pair
+separates two populations that overlap.
+
+What this means in practice: readability uniformity discriminates well on group means (human 20.8
+vs AI ~70) but a low-variance human chapter will read AI-like, and that is not fixable by
+calibration. It is currently the only signal producing false-positive pressure in the human set.
