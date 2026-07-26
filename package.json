@@ -8,8 +8,10 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "build:native": "powershell -ExecutionPolicy Bypass -File native/llama-engine/build-win32-x64.ps1",
