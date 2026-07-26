@@ -80,16 +80,35 @@ test("perplexityToScore never increases with perplexity, including outside the a
   }
 });
 
-test("the measured AI and human ranges land on opposite sides of the midpoint", () => {
-  // Observed on 2026-07-25 against Qwen2.5-1.5B-Instruct.Q4_K_M — see
-  // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md. This is what
-  // the anchors exist to achieve, so it should fail loudly if they drift.
-  for (const ppl of [15.81, 17.66, 19.33]) {
-    assert.ok(perplexityToScore(ppl) > 0.5, `AI-range perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
+// Every perplexity measured against Qwen2.5-1.5B-Instruct.Q4_K_M — see
+// docs/superpowers/notes/2026-07-25-llama-engine-calibration.md.
+const MEASURED_HUMAN_CHAPTERS = [24.1, 28.6, 20.9, 21.7, 24.2, 27.0, 23.0, 21.8, 21.9, 20.2, 19.6, 24.5];
+const MEASURED_AI_EXCERPTS = [15.81, 17.66, 19.33];
+
+test("no measured human chapter is scored as AI-leaning", () => {
+  // The failure this guards against is the expensive one: calling a real
+  // author's chapter machine-written. Human chapters run down to 19.6, so
+  // anchors tight enough to flag them would be actively harmful.
+  for (const ppl of MEASURED_HUMAN_CHAPTERS) {
+    assert.ok(perplexityToScore(ppl) <= 0.5, `human chapter perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
   }
-  for (const ppl of [24.07, 25.1, 27.33]) {
-    assert.ok(perplexityToScore(ppl) < 0.5, `human-range perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
+});
+
+test("measured AI excerpts still score as AI-leaning", () => {
+  for (const ppl of MEASURED_AI_EXCERPTS) {
+    assert.ok(perplexityToScore(ppl) > 0.5, `AI perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
   }
+});
+
+test("the AI and human groups stay meaningfully apart on average", () => {
+  // Deliberately a comparison of means, not of ranges: at chapter level the
+  // two groups overlap (an AI chapter measured 21.2, inside the human spread),
+  // so any test asserting clean separation would be encoding a claim the data
+  // does not support.
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+  const humanMean = mean(MEASURED_HUMAN_CHAPTERS.map(perplexityToScore));
+  const aiMean = mean(MEASURED_AI_EXCERPTS.map(perplexityToScore));
+  assert.ok(aiMean - humanMean > 0.15, `expected a clear gap in means, got AI ${aiMean.toFixed(2)} vs human ${humanMean.toFixed(2)}`);
 });
 
 test("perplexityToScore stays within 0..1", () => {

@@ -182,6 +182,48 @@ narrative prose lands in "uncertain" by design — on this evidence that is the 
 not a threshold to tune away. Tightening further would start producing false positives on human
 prose, which is the more costly error for this tool.
 
+## Follow-up: perplexity anchors loosened for chapter-level text
+
+The original anchors (16 / 28) were fitted to 1,200-word excerpts taken from mid-manuscript,
+where the groups separated cleanly. Testing whole chapters broke that picture.
+
+| sample | n | perplexity |
+|---|---|---|
+| human, 1,200-word excerpts | 3 | 24.1-27.3 |
+| **human, whole chapters** | **12** | **19.6-28.6** |
+| AI, 1,200-word excerpts | 3 | 15.8-19.3 |
+| **AI, whole chapter** | **1** | **21.2** |
+
+The human chapter range runs 4.5 points lower than the excerpt range, and an AI-written
+chapter landed at 21.2 — inside it. **The two populations overlap at chapter level.** The
+tight anchors were scoring 3 of 12 real human chapters above 0.5, i.e. calling a human
+author's chapter machine-written, which is the expensive direction to be wrong in.
+
+Widened to **12 / 32**, chosen by testing candidates against all 16 measurements:
+
+| anchors | human chapters | AI samples | human chapters >50 |
+|---|---|---|---|
+| 16 / 28 (before) | 0-64, mean 36 | 50-100, mean 75 | **3 of 12** |
+| **12 / 32 (chosen)** | 11-50, mean 34 | 42-72, mean 56 | **0 of 12** |
+| 10 / 36 | 18-47, mean 35 | 41-64, mean 52 | 0 of 12 |
+
+12/32 removes the false positives while keeping the widest gap between group means (22
+points). 10/36 removes them too but compresses the AI end for no gain. The cost of
+loosening is a less decisive signal — AI text now scores ~56 rather than ~75 — which is
+the honest reflection of a measurement whose populations overlap.
+
+**Why the excerpt calibration was misleading.** The excerpts were drawn from 40% into each
+manuscript, mid-scene. Whole chapters include openings and closings, which are more
+patterned prose, pulling perplexity down. Calibrating on excerpts and deploying on chapters
+was a sampling mismatch, and it is the same class of error as calibrating on 1,200 words
+and deploying on whole books.
+
+**Standing caveat, now larger.** Four AI samples against twelve human chapters, two human
+authors, one genre, one model. One of the four AI samples was written by Claude during this
+session with full knowledge of what the detectors measure, which makes it a weak test of
+naive LLM output. The outstanding work remains what it was: AI chapters from several
+models, written without knowledge of this tool.
+
 ## Follow-up: readability uniformity's measurement floor
 
 Chapter-level testing of a fourth manuscript showed short chapters scoring as more
