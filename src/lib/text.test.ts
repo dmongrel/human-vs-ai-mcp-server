@@ -30,6 +30,27 @@ test("tokenizeWords lowercases and strips punctuation", () => {
   assert.deepEqual(tokenizeWords("Hello, WORLD! It's fine."), ["hello", "world", "it's", "fine"]);
 });
 
+test("tokenizeWords keeps decimal numbers as one token", () => {
+  // Splitting "11.9" into "11" and "9" inflates word counts and manufactures
+  // phantom trigrams ("11 9 light") that look like repetition but aren't.
+  assert.deepEqual(tokenizeWords("11.9 light years away"), ["11.9", "light", "years", "away"]);
+});
+
+test("tokenizeWords keeps thousands separators as one token", () => {
+  assert.deepEqual(tokenizeWords("It cost 1,000 credits"), ["it", "cost", "1,000", "credits"]);
+  assert.deepEqual(tokenizeWords("about 1,250,000.75 total"), ["about", "1,250,000.75", "total"]);
+});
+
+test("tokenizeWords does not merge across a sentence boundary", () => {
+  // The separator only counts between digits, so a full stop still ends a word.
+  assert.deepEqual(tokenizeWords("It ended. The next day"), ["it", "ended", "the", "next", "day"]);
+  assert.deepEqual(tokenizeWords("chapter 9. Then it stopped"), ["chapter", "9", "then", "it", "stopped"]);
+});
+
+test("tokenizeWords handles a trailing separator and dotted versions", () => {
+  assert.deepEqual(tokenizeWords("9, then 3.5.2 shipped"), ["9", "then", "3.5.2", "shipped"]);
+});
+
 test("tokenizeWords returns empty array for no words", () => {
   assert.deepEqual(tokenizeWords("... !! ??"), []);
 });

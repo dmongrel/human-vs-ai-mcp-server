@@ -26,8 +26,20 @@ export function stripMarkdownMarkup(text: string): string {
   return text.replace(/[*_#]/g, "");
 }
 
+// Two alternatives, and the order matters. The first keeps a number's internal
+// separators ("11.9", "1,000", "3.5.2") in one token; it requires a digit on
+// BOTH sides of every separator, so a sentence-ending full stop still ends a
+// word ("chapter 9. Then" -> "9", "then"). The second is the ordinary word
+// rule, including the apostrophe so "it's" stays whole.
+//
+// Without the first alternative, "11.9 light years" tokenized as
+// ["11", "9", "light", "years"] — inflating word counts and sentence lengths,
+// and manufacturing trigrams like "11 9 light" that read as repetition in the
+// n-gram detector's report but are an artifact of the split.
+const WORD_PATTERN = /[0-9]+(?:[.,][0-9]+)+|[a-z0-9']+/g;
+
 export function tokenizeWords(text: string): string[] {
-  return (text.toLowerCase().match(/[a-z0-9']+/g) ?? []).filter((w) => w.length > 0);
+  return (text.toLowerCase().match(WORD_PATTERN) ?? []).filter((w) => w.length > 0);
 }
 
 export function mean(values: number[]): number {
