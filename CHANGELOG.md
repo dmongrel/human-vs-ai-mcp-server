@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.4] - 2026-07-26
+
+### Added
+
+- `weights` parameter on `detect_ai_usage`/`humanize_text` to override any detector's weight for a single call, without a rebuild. `get_context` reports the live default-weight table by detector id.
+
+### Changed
+
+- `readabilityUniformity` weight lowered to 0.1 (from 0.15/0.2/0.15) — a capable, varied-register writer can defeat this signal outright, so it should no longer be weighted second-highest.
+
 ## [0.0.3] - 2026-07-26
 
 ### Documentation
