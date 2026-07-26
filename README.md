@@ -44,7 +44,17 @@ This project is still under active development at `0.0.x` — expect the tool se
 
 Install Node.js (LTS) from [nodejs.org](https://nodejs.org/), or via your platform's package manager. Verify with `node --version` and `npm --version`.
 
-### From source (current)
+### From npm (recommended)
+
+```bash
+npm install -g human-vs-ai-mcp-server
+```
+
+On Windows x64 this also installs `human-vs-ai-mcp-server-win32-x64`, the prebuilt llama.cpp engine, as an optional dependency — roughly 24 MB, no Go toolchain or compiler needed. Elsewhere npm skips it and the eight stylometric signals work as normal.
+
+To update later: `npm update -g human-vs-ai-mcp-server`
+
+### From source
 
 ```bash
 git clone https://github.com/dmongrel/human-vs-ai-mcp-server.git
@@ -53,21 +63,28 @@ npm install
 npm run build
 ```
 
-### From npm (once published)
-
-```bash
-npm install -g human-vs-ai-mcp-server
-```
-
-To update later: `npm update -g human-vs-ai-mcp-server`
+`npm install` pulls the published engine package here too, so a clone gets a working engine without building it. To work on the native helper itself, run `npm run build:native` (needs Go and PowerShell) and point `LLAMA_ENGINE_HELPER_PATH` at `packages/win32-x64/llama-engine-helper.exe` to override the installed one.
 
 ---
 
 ## Usage
 
-Add a configuration block to your MCP client's config file (e.g., `claude_desktop_config.json` or `.mcp.json`). See [example-mcp.json](./example-mcp.json) for the local-build and global npm install entries side by side — keep only the entry you need.
+Add a configuration block to your MCP client's config file (e.g., `claude_desktop_config.json` or `.mcp.json`). See [example-mcp.json](./example-mcp.json) for the npm-install, local-build, engine, model-runner and plugin entries side by side — keep only the entry you need.
 
-**From a local build (current):**
+**From a global npm install:**
+
+```json
+{
+  "mcpServers": {
+    "human-vs-ai-mcp-server": {
+      "command": "human-vs-ai-mcp-server",
+      "args": []
+    }
+  }
+}
+```
+
+**From a local build:**
 
 ```json
 {
@@ -80,18 +97,32 @@ Add a configuration block to your MCP client's config file (e.g., `claude_deskto
 }
 ```
 
-**From a global npm install (once published):**
+### Enabling the perplexity signal
+
+Either entry above gives you the eight stylometric signals. The ninth — teacher-forced perplexity against the bundled engine — needs one more thing: a `.gguf` model, which you supply. Add an `env` block:
 
 ```json
 {
   "mcpServers": {
     "human-vs-ai-mcp-server": {
       "command": "human-vs-ai-mcp-server",
-      "args": []
+      "args": [],
+      "env": {
+        "LLAMA_ENGINE_MODEL_PATH": "F:/models/Qwen2.5-1.5B-Instruct.Q4_K_M.gguf",
+        "LLAMA_ENGINE_CTX_SIZE": "512",
+        "LLAMA_ENGINE_TIMEOUT_MS": "900000"
+      }
     }
   }
 }
 ```
+
+`LLAMA_ENGINE_MODEL_PATH` is the only required variable — the helper binary resolves from the installed platform package on its own, so there is **no path to the engine to configure**. The other two are worth setting anyway:
+
+- **`LLAMA_ENGINE_CTX_SIZE: 512`** — the anchors were measured at this chunk size. Changing it changes the numbers.
+- **`LLAMA_ENGINE_TIMEOUT_MS: 900000`** — the 60 s default is not enough for chapter-length text on CPU; a ~1,200-word chapter takes roughly 20 s, and a whole manuscript far longer. On expiry you get a partial result flagged as such rather than a failure.
+
+Use the same model the anchors were calibrated against (`Qwen2.5-1.5B-Instruct.Q4_K_M`) unless you intend to re-measure — perplexity values do not transfer between models. See [Bundled engine perplexity](#bundled-engine-perplexity) for what that signal can and cannot detect.
 
 ---
 

@@ -4,9 +4,28 @@
       "command": "human-vs-ai-mcp-server",
       "args": []
     },
+    "human-vs-ai-mcp-server-with-llama-engine": {
+      "command": "human-vs-ai-mcp-server",
+      "args": [],
+      "env": {
+        "LLAMA_ENGINE_MODEL_PATH": "/absolute/path/to/Qwen2.5-1.5B-Instruct.Q4_K_M.gguf",
+        "LLAMA_ENGINE_CTX_SIZE": "512",
+        "LLAMA_ENGINE_TIMEOUT_MS": "900000"
+      }
+    },
     "human-vs-ai-mcp-server-local-build": {
       "command": "node",
       "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"]
+    },
+    "human-vs-ai-mcp-server-native-development": {
+      "command": "node",
+      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
+      "env": {
+        "LLAMA_ENGINE_MODEL_PATH": "/absolute/path/to/Qwen2.5-1.5B-Instruct.Q4_K_M.gguf",
+        "LLAMA_ENGINE_CTX_SIZE": "512",
+        "LLAMA_ENGINE_TIMEOUT_MS": "900000",
+        "LLAMA_ENGINE_HELPER_PATH": "/absolute/path/to/human-vs-ai-mcp-server/packages/win32-x64/llama-engine-helper.exe"
+      }
     },
     "human-vs-ai-mcp-server-with-model-runner": {
       "command": "node",
@@ -15,15 +34,6 @@
         "MODEL_RUNNER_URL": "http://localhost:1234",
         "MODEL_RUNNER_MODEL": "ai-detection-gutenberg-human-formatted-ai-v1-sft-qwen-3b-dpo",
         "MODEL_RUNNER_CONTEXT_TOKENS": "32767"
-      }
-    },
-    "human-vs-ai-mcp-server-with-llama-engine": {
-      "command": "node",
-      "args": ["/absolute/path/to/human-vs-ai-mcp-server/dist/index.js"],
-      "env": {
-        "LLAMA_ENGINE_MODEL_PATH": "/absolute/path/to/your-model.gguf",
-        "LLAMA_ENGINE_CTX_SIZE": "2048",
-        "LLAMA_ENGINE_TIMEOUT_MS": "60000"
       }
     },
     "human-vs-ai-mcp-server-with-plugins": {

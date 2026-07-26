@@ -190,14 +190,24 @@ test("scorePerplexityViaEngine returns null and kills the helper when it exceeds
 
 test("scorePerplexityViaEngine returns null when no platform package is installed", async () => {
   process.env.LLAMA_ENGINE_MODEL_PATH = "F:\\models\\m.gguf";
-  // No LLAMA_ENGINE_HELPER_PATH, and no platform package is published yet, so
-  // resolution must fail closed rather than throwing.
+  // With no LLAMA_ENGINE_HELPER_PATH set, resolution must fail closed rather
+  // than throwing. The helper package is named for the running platform, so
+  // this forces an arch that can never have one — otherwise the test would
+  // pass or fail depending on whether the real platform package happens to be
+  // installed on the machine running it, which is how it originally broke.
+  const realArch = process.arch;
+  Object.defineProperty(process, "arch", { value: "nosucharch", configurable: true });
+
   let spawned = false;
   _internals.spawn = (() => {
     spawned = true;
     throw new Error("should not spawn");
   }) as typeof _internals.spawn;
 
-  assert.equal(await scorePerplexityViaEngine("Some text."), null);
-  assert.equal(spawned, false, "expected no spawn attempt when the helper cannot be resolved");
+  try {
+    assert.equal(await scorePerplexityViaEngine("Some text."), null);
+    assert.equal(spawned, false, "expected no spawn attempt when the helper cannot be resolved");
+  } finally {
+    Object.defineProperty(process, "arch", { value: realArch, configurable: true });
+  }
 });
