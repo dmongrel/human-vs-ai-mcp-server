@@ -49,6 +49,7 @@ Third parties can add signals without forking, via [`PLUGINS_DIR`](#plugins).
 
 - **Frontier-model prose is not detectable.** A Claude Opus 5 chapter scores 19 — a `likely-human` verdict on AI text. Small and mid-size open models are caught easily; capable ones are not. See [What it can and cannot catch](#what-it-can-and-cannot-catch).
 - **Perplexity partly measures prose style, not authorship** — plain modern writing scores AI-like regardless of who wrote it.
+- **Readability uniformity is capability-dependent.** It catches uniform AI generation, but a model that varies its register across genres scores 0 outright — a Sonnet 5 sample scored higher variance than the human median. See [Readability uniformity: a capability-dependent signal](#readability-uniformity-a-capability-dependent-signal).
 - **The engine is Windows x64 only.** Elsewhere the other signals work unchanged.
 
 Treat every result as a starting point for human review, never as a verdict.
@@ -181,6 +182,14 @@ Longer input is accepted and returns a result, but treat it as a rough screen ra
 - **The engine may not finish.** Perplexity scoring runs at roughly 90 tokens/second on CPU, so a full manuscript takes ~15 minutes. Whatever `LLAMA_ENGINE_TIMEOUT_MS` allows is what gets scored; the rest of the document is covered by stylometry alone, and the report says so.
 
 Analysing a whole book is therefore best done chapter by chapter, which also tells you *which* chapter is the problem — something a single document-level score cannot.
+
+### Readability uniformity: a capability-dependent signal
+
+This signal compares Flesch Reading Ease variance across paragraphs, on the premise that human writers drift register paragraph to paragraph and AI generation stays uniform. Measured across 12 human chapters (four manuscripts, variance 13.4–42.0) against 7 AI chapters (three models, two genres each, variance 10.4–25.1), the premise holds only sometimes.
+
+llama-3-8b, qwen3-14b, and a same-genre, same-prompt Claude Opus 5 sample all scored 58–97 (AI-like) on this signal. Two chapters written by a Sonnet 5 subagent, one hard science fiction and one space fantasy, scored **0** — their readability variance (23.6, 25.1) sits *above* the human median. A capable model that varies its register between genres defeats this signal outright, the same way a capable model defeats the perplexity signal above. An earlier three-sample AI set that shared one prompt and one genre clustered tightly at 13.3–13.9 and looked like a clean, separate population; widening the sample by model and genre erased that.
+
+Group means still separate (human 20.8, AI 52.1 on the report's 0–100 scale), so the signal has real value in aggregate, and it stays enabled. But a high score here should be read as corroborating at most — not as its own evidence — because it is possible to write AI text that this signal cannot see at all. See the calibration note's "Widening the AI sample by model and genre" section for the full data.
 
 ---
 

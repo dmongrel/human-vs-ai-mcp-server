@@ -41,20 +41,29 @@ const MIN_MEASURABLE_PARAGRAPHS = 8;
 // Flesch stdev anchors, measured against the calibration corpus (see
 // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
 //
-// KNOWN OVERLAP — do not "fix" this by moving the anchors. Measured across 12
-// chapters from four manuscripts, human stdev runs 13.4-42.0 while three AI
-// chapters cluster at 13.3-13.9. VARIED_STDEV sits at the human *median*, so
-// roughly half of human chapters score above zero, and the lowest-variance
-// human chapter falls inside the AI cluster and is genuinely indistinguishable.
+// KNOWN OVERLAP, AND IT IS CAPABILITY-DEPENDENT — do not "fix" this by moving
+// the anchors. Measured across 12 human chapters from four manuscripts (stdev
+// 13.4-42.0, score mean 20.8) against 7 AI chapters spanning three models and
+// two genres (stdev 10.4-25.1, score mean 52.1). Group means still separate,
+// but the AI group is bimodal: llama-3-8b, qwen3-14b and a single-genre,
+// single-prompt Opus sample score 58-97, while two Sonnet 5 chapters (one
+// hard SF, one space fantasy) score 0 outright — their readability variance
+// (23.6, 25.1) sits *above* the human median of 22. A capable model that
+// varies register the way a human paragraph-to-paragraph does defeats this
+// signal completely. An earlier three-sample AI set, all one prompt in one
+// genre, clustered tightly at 13.3-13.9 and looked like a clean separate
+// population; that was a same-prompt artifact, not a property of AI prose,
+// and widening the sample by model and genre erased it.
 //
-// Retuning was tried and does not help: lowering VARIED to 18 cuts the worst
-// human score from 72 to 58 but drops AI from ~70 to ~55, narrowing the gap
-// between group means rather than widening it. Raising VARIED raises every
-// score. The populations overlap; no anchor pair separates them.
+// Retuning does not help: on the earlier, narrower data, lowering VARIED to
+// 18 cut the worst human score but cut AI detection by the same motion,
+// narrowing the group-mean gap rather than widening it. With capable models
+// now scoring above the human median, no anchor pair fixes this — the signal
+// structurally cannot see prose from a model that varies its own register.
 //
-// The signal still earns its weight on group means (human 20.8 vs AI ~70), but
-// it is the only signal producing false-positive pressure on human prose, so
-// treat a high score here as weak evidence on its own.
+// This signal's weight (0.2 in `creative`, second only to perplexity) predates
+// this measurement and has not been revisited against it — see the
+// calibration note for the open question of whether it should come down.
 //
 // Note the floor above was also suspected and cleared: the correlation between
 // measurable-paragraph count and score is +0.31, weakly *positive*, so short

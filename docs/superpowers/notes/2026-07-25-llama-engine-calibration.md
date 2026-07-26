@@ -508,3 +508,58 @@ separates two populations that overlap.
 What this means in practice: readability uniformity discriminates well on group means (human 20.8
 vs AI ~70) but a low-variance human chapter will read AI-like, and that is not fixable by
 calibration. It is currently the only signal producing false-positive pressure in the human set.
+
+## Follow-up: widening the AI sample by model and genre
+
+The 13.3-13.9 AI readability cluster above came from three chapters sharing one prompt and one
+genre (radio telescope, remote desert, dialogue-heavy). Widened it: two new chapters written
+directly (Claude Opus 5, hard SF and space fantasy), plus two from a Sonnet 5 subagent on the same
+brief (hard SF and space fantasy) — no LM Studio available this round, so this widens by model
+(Opus, Sonnet, plus the existing llama-3-8b and qwen3-14b samples) and by genre, not by local model
+family. All four new chapters were written straight, without trying to imitate a human author or
+evade detection, matching the existing corpus's convention.
+
+### Perplexity: the cluster held up
+
+Both new Opus chapters scored perplexity 23.1 and 25.3, and both read `likely-human` overall (12,
+17) — inside the human range and above nine of the twelve real chapters measured. The Sonnet hard
+SF chapter scored raw perplexity **38.7**, the top of the entire 25-novelist range, and above every
+one of the twelve real chapters. Nothing here overturns the 6/30 anchors; if anything it reinforces
+that frontier output is not separable on this signal.
+
+### Readability uniformity: the cluster was a same-prompt artifact, and the real finding is worse
+
+Flesch stdev across all AI samples now measured:
+
+| sample | stdev |
+|---|---|
+| Opus 5, space fantasy | 10.4 |
+| llama-3-8b | 13.3 |
+| Opus 5, telescope (original) | 13.5 |
+| qwen3-14b | 13.9 |
+| Opus 5, hard SF | 15.1 |
+| Sonnet 5, hard SF | **23.6** |
+| Sonnet 5, space fantasy | **25.1** |
+
+AI stdev now spans **10.4-25.1** — inside the human range (13.4-42.0), not below it. Two of seven
+AI chapters score *above* the human median (22). Group means still separate (human 20.8, AI 52.1),
+but the AI group is now clearly bimodal: llama-3-8b, qwen3-14b, and a single-genre/single-prompt
+Opus sample score 58-97; both Sonnet 5 chapters score **0**, indistinguishable from the most
+naturally-varied human chapters.
+
+**The signal is not measuring "AI-ness." It is measuring whether the writer (human or model) varies
+register paragraph to paragraph.** A capable model instructed to write two different genres varied
+its register enough to defeat this signal outright, the same way Claude Opus 5 defeated the
+perplexity signal. The tight cluster in the original three-sample set was an artifact of asking one
+model to write one genre three times, not evidence that AI prose has structurally low readability
+variance.
+
+Retuning was not attempted against this wider sample — the earlier retune test (lowering VARIED to
+18) already showed it narrows rather than widens the group gap, and with AI chapters now scoring
+above the human median, no anchor pair fixes a signal that a varied-register writer defeats by
+construction.
+
+**Open question, not resolved here:** this signal's weight (0.2 in the `creative` ruleset) was set
+before either of these measurements. Whether it should come down, given it can be defeated entirely
+by a single capable, varied-register generation, is a judgment call for the project owner rather
+than something this measurement settles on its own.
