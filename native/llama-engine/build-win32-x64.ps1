@@ -66,4 +66,11 @@ if ($License) {
 }
 if (-not (Test-Path $LicenseDest)) { throw "failed to stage llama.cpp's LICENSE - required for redistribution" }
 
-Write-Host "Staged $($Dlls.Count) DLL(s) and llama-engine-helper.exe into $Dest"
+# This package publishes as its own npm tarball, so it needs the project's own
+# licence alongside llama.cpp's. npm's `files` globs cannot reach outside the
+# package directory, which is why it is copied here rather than referenced.
+$ProjectLicense = Join-Path $PSScriptRoot "..\..\LICENSE"
+if (-not (Test-Path $ProjectLicense)) { throw "project LICENSE not found at $ProjectLicense" }
+Copy-Item -Path $ProjectLicense -Destination (Join-Path $Dest "LICENSE") -Force
+
+Write-Host "Staged $($Dlls.Count) DLL(s), 2 licence file(s) and llama-engine-helper.exe into $Dest"

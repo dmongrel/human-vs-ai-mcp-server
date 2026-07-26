@@ -19,13 +19,16 @@ const ROOT = path.resolve(__dirname, "..");
 const PKG_DIR = path.join(ROOT, "packages", "win32-x64");
 
 // One representative file per category rather than the whole manifest: the
-// helper itself, the two libraries it resolves at runtime, and the llama.cpp
-// license we are obliged to redistribute. If the build ran, all of these exist.
+// helper itself, the two libraries it resolves at runtime, and both licences —
+// llama.cpp's, which we are obliged to redistribute alongside its compiled
+// DLLs, and the project's own, since this publishes as a standalone tarball.
+// If the build ran, all of these exist.
 const REQUIRED = [
   "llama-engine-helper.exe",
   "llama.dll",
   "ggml.dll",
   "ggml-base.dll",
+  "LICENSE",
   "LICENSE.llama.cpp",
 ];
 

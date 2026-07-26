@@ -1,4 +1,5 @@
 # Build output, staged by native/llama-engine/build-win32-x64.ps1.
 *.exe
 *.dll
+LICENSE
 LICENSE.llama.cpp
