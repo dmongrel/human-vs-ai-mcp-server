@@ -28,15 +28,30 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 
 ## Status
 
-Published on npm as [`human-vs-ai-mcp-server`](https://www.npmjs.com/package/human-vs-ai-mcp-server):
+**`v0.0.1`** — published on npm as [`human-vs-ai-mcp-server`](https://www.npmjs.com/package/human-vs-ai-mcp-server), alongside the prebuilt engine package `human-vs-ai-mcp-server-win32-x64`. Under active development at `0.0.x`; expect the tool set to change.
 
-```
-npm install -g human-vs-ai-mcp-server
-```
+**Tools:** `detect_ai_usage`, `humanize_text`, `get_context` — all implemented.
 
-On Windows x64 that also pulls the prebuilt llama.cpp engine automatically (a ~24 MB optional dependency) — no Go toolchain, no compiler, no separate llama.cpp install. On other platforms the engine is skipped and the remaining signals work normally. The perplexity signal additionally needs a `.gguf` model you supply yourself; see [Bundled engine perplexity](#bundled-engine-perplexity).
+**Signals:** 8 active, 2 deliberately disabled.
 
-This project is still under active development at `0.0.x` — expect the tool set to change.
+| | signal | state |
+|---|---|---|
+| ✅ | sentence-length burstiness, lexical diversity, AI stock phrases, readability uniformity, markdown-in-prose, em dash overuse, n-gram repetition | active |
+| ✅ | bundled llama.cpp engine perplexity | active; contributes only when `LLAMA_ENGINE_MODEL_PATH` is set |
+| ❌ | HTTP model-runner perplexity | disabled — technique is structurally broken ([why](#model-runner-currently-disabled)) |
+| ❌ | paragraph coherence | disabled — premise measured and did not hold for narrative prose |
+
+Third parties can add signals without forking, via [`PLUGINS_DIR`](#plugins).
+
+**Calibration:** every threshold was measured, not assumed — on ~1,200-word excerpts, so the tools are tuned for [chapter-length text](#input-length-calibrated-for-chapter-length-text). The perplexity anchors rest on 25 published novelists.
+
+**Known limits, measured rather than suspected:**
+
+- **Frontier-model prose is not detectable.** A Claude Opus 5 chapter scores 19 — a `likely-human` verdict on AI text. Small and mid-size open models are caught easily; capable ones are not. See [What it can and cannot catch](#what-it-can-and-cannot-catch).
+- **Perplexity partly measures prose style, not authorship** — plain modern writing scores AI-like regardless of who wrote it.
+- **The engine is Windows x64 only.** Elsewhere the other signals work unchanged.
+
+Treat every result as a starting point for human review, never as a verdict.
 
 ## Installation
 
