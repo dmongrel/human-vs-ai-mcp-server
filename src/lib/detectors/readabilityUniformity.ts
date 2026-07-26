@@ -15,10 +15,14 @@
 import { clamp, fleschReadingEase, stdev } from "../text.js";
 import type { Detector, DocumentType } from "./types.js";
 
+// Lowered from 0.15/0.2/0.15 after the 7-chapter widened AI sample showed a
+// capable, varied-register writer can defeat this signal outright (score 0,
+// two Sonnet 5 chapters) — see the KNOWN OVERLAP comment below and the
+// calibration note. Kept nonzero because group means still separate.
 const WEIGHT: Record<"default" | DocumentType, number> = {
-  default: 0.15,
-  creative: 0.2,
-  strategic: 0.15,
+  default: 0.1,
+  creative: 0.1,
+  strategic: 0.1,
 };
 
 // Below this, a paragraph's Flesch score is noise rather than a measurement.
@@ -61,9 +65,8 @@ const MIN_MEASURABLE_PARAGRAPHS = 8;
 // now scoring above the human median, no anchor pair fixes this — the signal
 // structurally cannot see prose from a model that varies its own register.
 //
-// This signal's weight (0.2 in `creative`, second only to perplexity) predates
-// this measurement and has not been revisited against it — see the
-// calibration note for the open question of whether it should come down.
+// Weight lowered to 0.1 (from 0.15/0.2/0.15) on the strength of this finding —
+// see the WEIGHT table above and the calibration note.
 //
 // Note the floor above was also suspected and cleared: the correlation between
 // measurable-paragraph count and score is +0.31, weakly *positive*, so short

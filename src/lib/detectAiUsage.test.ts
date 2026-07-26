@@ -82,8 +82,14 @@ test("returns all seven active named detectors (model-runner perplexity and para
     "em dash overuse",
     "n-gram repetition",
   ].sort());
+  // Default ruleset. Not 1.1 like the other two rulesets: readabilityUniformity
+  // was lowered to a flat 0.1 across all three rulesets after the widened AI
+  // sample showed a capable, varied-register writer defeats it outright, but
+  // it previously carried a higher share (0.2) in `creative` than in `default`
+  // or `strategic` (0.15 each) -- so the flat lowering shrinks creative's total
+  // by more (1.1 -> 1.0) than default/strategic's (1.1 -> 1.05).
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.1) < 1e-9, `weights should sum to 1.1, got ${totalWeight}`);
+  assert.ok(Math.abs(totalWeight - 1.05) < 1e-9, `weights should sum to 1.05, got ${totalWeight}`);
 });
 
 test("em dash detector scores high for heavy em dash use and reports no hits for clean text", async () => {
@@ -160,11 +166,20 @@ test("report echoes back the type used, defaulting to 'default'", async () => {
   assert.equal((await detectAiUsage(HUMAN_TEXT, "strategic")).type, "strategic");
 });
 
-test("all three rulesets produce weights that sum to 1.1", async () => {
+test("each ruleset's weights sum to its expected total", async () => {
+  // No longer a uniform 1.1 across all three. readabilityUniformity's weight
+  // was flattened to 0.1 in every ruleset, but it previously carried a larger
+  // share in `creative` (0.2) than in `default`/`strategic` (0.15), so the
+  // flat change shrinks creative's total by more.
+  const expected: Record<string, number> = { default: 1.05, creative: 1.0, strategic: 1.05 };
   for (const type of [undefined, "creative", "strategic"] as const) {
     const report = await detectAiUsage(HUMAN_TEXT, type);
     const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-    assert.ok(Math.abs(totalWeight - 1.1) < 1e-9, `${type ?? "default"} weights should sum to 1.1, got ${totalWeight}`);
+    const key = type ?? "default";
+    assert.ok(
+      Math.abs(totalWeight - expected[key]) < 1e-9,
+      `${key} weights should sum to ${expected[key]}, got ${totalWeight}`
+    );
   }
 });
 
@@ -377,7 +392,7 @@ test("HTTP model-runner perplexity stays disabled even when a runner is configur
   assert.equal(report.detectors.length, 7);
   assert.equal(fetchCalled, false, "expected no network call while the signal is disabled");
   const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.1) < 1e-9);
+  assert.ok(Math.abs(totalWeight - 1.05) < 1e-9, `expected 1.05, got ${totalWeight}`);
 });
 
 // --- N-gram repetition detector ---

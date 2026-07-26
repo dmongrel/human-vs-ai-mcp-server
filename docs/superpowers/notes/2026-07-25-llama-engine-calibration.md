@@ -559,7 +559,7 @@ Retuning was not attempted against this wider sample — the earlier retune test
 above the human median, no anchor pair fixes a signal that a varied-register writer defeats by
 construction.
 
-**Open question, not resolved here:** this signal's weight (0.2 in the `creative` ruleset) was set
-before either of these measurements. Whether it should come down, given it can be defeated entirely
-by a single capable, varied-register generation, is a judgment call for the project owner rather
-than something this measurement settles on its own.
+**Resolved:** weight lowered from 0.15/0.2/0.15 to a flat 0.1 across all rulesets, on the project
+owner's decision given this measurement. Kept nonzero because group means still separate (human
+20.8, AI 52.1) — it remains corroborating evidence, just no longer weighted as the second-strongest
+signal in the set.
