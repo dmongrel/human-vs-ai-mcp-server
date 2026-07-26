@@ -116,6 +116,38 @@ test("em dash detector ignores en dashes used as number ranges", async () => {
   assert.match(detector.detail, /No em or en dashes detected/);
 });
 
+test("em dash detector counts the horizontal bar variant", async () => {
+  const text = "This is a sentence ― with a horizontal bar ― and another ― right here ― for emphasis ― repeatedly.";
+  const detector = findDetector(await detectAiUsage(text), "em dash overuse");
+  assert.ok(detector.score > 0.5, `expected horizontal bars to register, got ${detector.score}`);
+});
+
+test("em dash detector counts double hyphens, spaced or word-flanked", async () => {
+  const spaced = findDetector(await detectAiUsage("A clause -- then another -- and a third -- closing out -- here -- again."), "em dash overuse");
+  assert.ok(spaced.score > 0.5, `expected spaced double hyphens to register, got ${spaced.score}`);
+
+  const flanked = findDetector(await detectAiUsage("A clause--then another--and a third--closing out--here--again."), "em dash overuse");
+  assert.ok(flanked.score > 0.5, `expected word-flanked double hyphens to register, got ${flanked.score}`);
+});
+
+test("em dash detector ignores command-line flags and markdown rules", async () => {
+  // "--verbose" is a flag, "---" is a horizontal rule. Neither is a pause
+  // marker, and counting them would fire on any technical or markdown text.
+  const flags = findDetector(await detectAiUsage("Run the build with --verbose and --force set, then check --dry-run before you commit anything."), "em dash overuse");
+  assert.equal(flags.score, 0);
+
+  const rule = findDetector(await detectAiUsage("A paragraph of ordinary prose here.\n\n---\n\nAnother paragraph of ordinary prose follows the rule."), "em dash overuse");
+  assert.equal(rule.score, 0);
+});
+
+test("em dash detector ignores unspaced figure dashes but counts spaced ones", async () => {
+  const range = findDetector(await detectAiUsage("The totals ran 1914‒18 and 40‒65 across the whole period, which nobody recorded properly at the time."), "em dash overuse");
+  assert.equal(range.score, 0);
+
+  const pause = findDetector(await detectAiUsage("A clause ‒ then another ‒ and a third ‒ closing out ‒ here ‒ again."), "em dash overuse");
+  assert.ok(pause.score > 0.5, `expected spaced figure dashes to register, got ${pause.score}`);
+});
+
 test("em dash detector counts em and en dashes together", async () => {
   const text = "One clause — then another – and a third — closing it out here with enough words to make a sentence.";
   const detector = findDetector(await detectAiUsage(text), "em dash overuse");
