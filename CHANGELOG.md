@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.0.3] - 2026-07-26
+
+### Documentation
+
+- Update instructions now say to uninstall and reinstall. `npm update -g` bumps the main package without installing the matching engine package, and the loss is silent.
+- Added a one-liner for checking the installed engine version.
+
 ## [0.0.2] - 2026-07-26
 
 Calibration and documentation release. No new tools; the detection behaviour changes because the perplexity anchors were refitted against a much wider human sample.
