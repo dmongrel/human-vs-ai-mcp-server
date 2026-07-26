@@ -97,7 +97,7 @@ export async function detectAiUsage(text: string, type?: DocumentType, ignoreMd?
     sentenceCount: ctx.sentences.length,
     detectors,
     caveat:
-      "This is a heuristic, explainable estimate based on multiple independent signals (see the per-detector breakdown below), optionally including third-party plugin signals and an opt-in real perplexity check against a local model. It is not a trained classifier and can be wrong in both directions — treat it as a starting point for human review, not a verdict.",
+      "This is a heuristic, explainable estimate based on multiple independent signals (see the per-detector breakdown above), optionally including third-party plugin signals and, when a .gguf model is configured, teacher-forced perplexity against the bundled llama.cpp engine. It is not a trained classifier and can be wrong in both directions — treat it as a starting point for human review, not a verdict. A low score means the text shows none of the tells these signals look for, which is not the same as evidence it was written by a human: prose from a capable model scores inside the human range.",
   };
 }
 
