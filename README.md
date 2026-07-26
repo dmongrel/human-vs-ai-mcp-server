@@ -231,7 +231,22 @@ The engine ships inside the package (as an `optionalDependency` installed only o
 
 Unlike the model-runner path, this signal demonstrably discriminates. Scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`, a famous Dickens opening returns a perplexity of 1.7, LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, and random word salad 4016 — roughly three orders of magnitude of spread.
 
-On a matched-sample comparison with the same model, three human excerpts scored 24.1-27.3 and three AI-written passages of the same genre and length scored 15.8-19.3, with no overlap. The detector's anchors (16 AI-like, 28 human-like) bracket that boundary. **That is three samples per side from one author each**, which is enough to show the signal separates and not enough to know how wide either distribution really is — which is why it ships disabled. Full measurements and caveats are in [`docs/superpowers/notes/2026-07-25-llama-engine-calibration.md`](./docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
+On a matched-sample comparison with the same model, three human excerpts scored 24.1-27.3 and three AI-written passages of the same genre and length scored 15.8-19.3, with no overlap. Wider chapter-level measurement put twelve human chapters at 19.6-28.6, and the anchors were loosened to match (12 AI-like, 32 human-like). **That is still a thin sample from few authors** — enough to show the signal separates, not enough to know how wide either distribution really is. Full measurements and caveats are in [`docs/superpowers/notes/2026-07-25-llama-engine-calibration.md`](./docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
+
+### What it can and cannot catch
+
+Detection difficulty scales with the model that wrote the text, and the gap is large enough to matter more than any threshold choice. Three AI chapters of the same genre and length, scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`:
+
+| Author | Perplexity | Overall score |
+|---|---|---|
+| llama-3-8b | 5.7 | 35 |
+| qwen3-14b | 7.2 | 32 |
+| Claude Opus 5 | 21.2 | 21 |
+| human chapters (n=12) | 19.6-28.6 | 6-22 |
+
+Small and mid-size open models are three to four times more predictable than any human chapter measured, saturating the signal. Frontier output sits **inside** the human range, and no threshold separates it — on this signal, text from a frontier model is indistinguishable from human prose. Read a low score as "not written by a small local model", not as "written by a human".
+
+The comparison also disproves the obvious confound: qwen3-14b shares its lineage with the Qwen scorer and still scored *higher* (less predictable) than llama-3-8b, so the signal is not measuring shared tokenizer or training family. One chapter per author, one genre, one prompt — and the Claude sample was written with knowledge of what these detectors measure.
 
 ### Configuration
 
@@ -242,7 +257,7 @@ On a matched-sample comparison with the same model, three human excerpts scored 
 | `LLAMA_ENGINE_TIMEOUT_MS` | no | `60000` | Overall time budget. On expiry the helper returns whatever chunks completed rather than failing. |
 | `LLAMA_ENGINE_HELPER_PATH` | no | resolved from the platform package | Development override pointing at a locally built helper binary. |
 
-Setting these is not sufficient on its own — the detector is disabled in code. See below.
+Setting `LLAMA_ENGINE_MODEL_PATH` is sufficient to activate the signal — the detector is enabled in code.
 
 ### Platform support
 
