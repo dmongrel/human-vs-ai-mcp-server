@@ -23,9 +23,16 @@ import type { DocumentType } from "./detectors/types.js";
 // Verdict bands, calibrated against measured scores rather than assumed ones
 // (see docs/superpowers/notes/2026-07-25-llama-engine-calibration.md):
 //
-//   human narrative prose            6-8
-//   AI narrative prose, well-written 29-35
+//   human narrative prose                                            6-22
+//   AI narrative prose                                              19-38
 //   AI text stuffed with stock phrases, markdown and uniform register   50
+//
+// Those first two ranges overlap, and that overlap is real rather than a
+// calibration failure — see the note. The strongest signal (engine perplexity)
+// cannot separate frontier-model output from human prose, so an AI chapter
+// from a capable model lands at 19 and is reported "likely-human". Tightening
+// the lower band to catch it would report measured human novelists as
+// machine-written, which is the costlier error here.
 //
 // The previous bands (<35 / >65) predated any measurement and were wrong in
 // both directions. 35 sat *above* the AI range, so genuinely AI-written prose
