@@ -182,6 +182,51 @@ narrative prose lands in "uncertain" by design — on this evidence that is the 
 not a threshold to tune away. Tightening further would start producing false positives on human
 prose, which is the more costly error for this tool.
 
+## Follow-up: three AI authors, and what perplexity actually measures
+
+Three AI-written chapters of the same brief (radio telescope, remote desert, unexplained
+signal, ~1,200 words, dialogue-heavy), scored against the same 12 human chapters.
+
+| author | perplexity | ppl score | readability | dash | overall |
+|---|---|---|---|---|---|
+| llama-3-8b-instruct | **5.7** | 100 | 72 | 76 | 35/100 |
+| qwen3-14b | **7.2** | 100 | 67 | 36 | 32/100 |
+| Claude Opus 5 | **21.2** | 42 | 71 | 10 | 21/100 |
+| human chapters (n=12) | 19.6-28.6 | 11-50 | 11-50 | 0 | 6-22/100 |
+
+**The family confound is not real.** The worry was that scoring with Qwen2.5-1.5B would
+flatter text written by another Qwen model, making perplexity a lineage detector rather than
+an AI detector. It went the other way: qwen3-14b scored 7.2 against llama-3-8b's 5.7, so the
+same-family model was measurably *less* predictable to the scorer. Whatever perplexity is
+tracking, it is not shared tokenizer or training lineage.
+
+**Detection difficulty scales with model capability, and the gap is enormous.** Two locally
+runnable open models land at 5.7-7.2 — three to four times more predictable than any human
+chapter, saturating the signal with room to spare. Claude Opus 5 lands at 21.2, inside the
+human range of 19.6-28.6. On the strongest signal this tool has, a frontier model is
+indistinguishable from human prose while an 8B model is trivially caught.
+
+That is the finding that matters for how the tool is described. It is a reliable detector of
+small and mid-size open models, and close to useless against frontier output. The anchors
+cannot fix this: no threshold separates 21.2 from a human range that spans 19.6 to 28.6.
+
+**Stylistic tells are per-model and do not generalize.** Each author had a different
+punctuation habit: llama-3-8b used spaced en dashes (76/100), qwen3-14b used real em dashes
+(36/100), Claude used almost none (10/100). A dash heuristic tuned on ChatGPT-era output
+caught none of llama-3-8b's until the variant table was added. Expect the same fragility
+from every fingerprint-style signal.
+
+**Readability uniformity was the one consistent signal**, scoring 67-72 across all three AI
+chapters regardless of author, against 11-50 for human chapters. It is weaker than perplexity
+against small models but, unlike perplexity, it did not collapse against Opus 5 — it still
+read 71 there while perplexity read 42.
+
+**Caveats.** One chapter per author, one genre, one prompt. The llama-3-8b sample was
+assembled from two generations (it stopped at 614 words) and so contains a seam. The Claude
+sample was written in-session by an author with full knowledge of what these detectors
+measure, which plausibly depresses its score; the qwen3-14b and llama-3-8b samples have no
+such contamination and are the cleaner data points.
+
 ## Follow-up: perplexity anchors loosened for chapter-level text
 
 The original anchors (16 / 28) were fitted to 1,200-word excerpts taken from mid-manuscript,
