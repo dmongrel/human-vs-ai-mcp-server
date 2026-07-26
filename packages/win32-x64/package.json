@@ -1,6 +1,6 @@
 {
   "name": "human-vs-ai-mcp-server-win32-x64",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Prebuilt llama.cpp perplexity helper for human-vs-ai-mcp-server (Windows x64). Not intended for direct installation.",
   "os": ["win32"],
   "cpu": ["x64"],
