@@ -203,3 +203,10 @@ test("model-perplexity recommendation stays disabled even when the runner is con
   assert.equal(findRecommendation(report, "Text is unusually predictable to the configured local model"), undefined);
   assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
 });
+
+test("weight overrides pass through to detectAiUsage and shift aiLikelihoodScore", async () => {
+  const text = "In today's fast-paced world, it's important to note that we must delve into the tapestry of possibilities. Furthermore, this seamless approach will leverage cutting-edge solutions.";
+  const withoutOverride = await humanizeText(text, "creative");
+  const zeroed = await humanizeText(text, "creative", undefined, { "ai-phrase": 0 });
+  assert.notEqual(zeroed.aiLikelihoodScore, withoutOverride.aiLikelihoodScore);
+});

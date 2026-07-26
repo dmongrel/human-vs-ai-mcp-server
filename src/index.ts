@@ -26,6 +26,12 @@ const textSourceSchema = {
     .boolean()
     .optional()
     .describe("If true, ignore markdown markup ('*', '_', and '#' characters only) before analysis, so legitimate use of those characters (e.g. chapter headers) isn't flagged as an AI artifact."),
+  weights: z
+    .record(z.string(), z.number().nonnegative())
+    .optional()
+    .describe(
+      "Override specific detector weights for this call only, keyed by detector id (e.g. { \"llama-engine-perplexity\": 0.5 }). Detector ids not present keep the ruleset's default weight; unrecognized ids are ignored. Call get_context({ topic: 'detect_ai_usage' }) for the full list of detector ids and their default weight per ruleset."
+    ),
 };
 
 function requireOneSource(input: { text?: string; filePath?: string }) {
@@ -44,10 +50,10 @@ server.registerTool(
     description: "Estimate the likelihood that text was AI-generated, using explainable stylometric heuristics. Call get_context({ topic: 'detect_ai_usage' }) for methodology details.",
     inputSchema: textSourceSchema,
   },
-  async ({ text, filePath, reportPath, type, ignoreMd }) => {
+  async ({ text, filePath, reportPath, type, ignoreMd, weights }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = await detectAiUsage(input, type, ignoreMd);
+    const report = await detectAiUsage(input, type, ignoreMd, weights);
     const output = await deliverOutput(formatDetectionReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }
@@ -60,10 +66,10 @@ server.registerTool(
     description: "Get actionable recommendations for making AI-leaning text read more naturally human. Call get_context({ topic: 'humanize_text' }) for details.",
     inputSchema: textSourceSchema,
   },
-  async ({ text, filePath, reportPath, type, ignoreMd }) => {
+  async ({ text, filePath, reportPath, type, ignoreMd, weights }) => {
     requireOneSource({ text, filePath });
     const input = await resolveInputText({ text, filePath });
-    const report = await humanizeText(input, type, ignoreMd);
+    const report = await humanizeText(input, type, ignoreMd, weights);
     const output = await deliverOutput(formatHumanizeReport(report), reportPath);
     return { content: [{ type: "text", text: output }] };
   }

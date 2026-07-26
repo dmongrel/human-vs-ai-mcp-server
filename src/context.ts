@@ -2,6 +2,8 @@
 // short. Call the `get_context` tool with a topic to retrieve this content
 // at runtime. Keep this in sync with TOOLS.md.
 
+import { formatDetectorWeightsTable } from "./lib/detectAiUsage.js";
+
 export const CONTEXT: Record<string, string> = {
   overview: `human-vs-ai-mcp-server exposes tools to (1) estimate whether a piece of text was AI-generated, and (2) get recommendations for making AI-leaning text read more naturally human.
 
@@ -14,6 +16,8 @@ Output: results are returned inline over stdio by default. Pass 'reportPath' to 
 Both detect_ai_usage and humanize_text also accept an optional 'type': "creative" (novels/creative writing) or "strategic" (business documents, presentations, marketing materials). If you called detect_ai_usage with a type, pass the same type to humanize_text so its recommendations use a consistent ruleset.
 
 Both tools also accept an optional 'ignoreMd' boolean: if true, literal '*', '_', and '#' characters are stripped before analysis, so legitimate use of those characters (e.g. chapter headers, emphasis) isn't flagged as an AI markdown artifact. '-' bullet lines are unaffected. Pass the same ignoreMd value to both tools when calling them on the same text.
+
+Both tools also accept an optional 'weights' object to override specific detector weights for that one call, keyed by detector id -- e.g. { "llama-engine-perplexity": 0.5 }. This does not change any file on disk; it only affects the current call. See { "topic": "detect_ai_usage" } for the full table of detector ids and their default weight per ruleset.
 
 Call get_context with { "topic": "detect_ai_usage" } or { "topic": "humanize_text" } for details on each tool's scoring methodology and output shape.`,
 
@@ -39,9 +43,11 @@ Readability uniformity has a related, capability-dependent limitation. Measured 
 
 INPUT LENGTH — this matters for how much to trust the number. Every threshold above was calibrated on ~1,200-word excerpts, so the tool is tuned for chapter-length text (roughly 500-3,000 words). Longer input is accepted and returns a result, but treat it as a rough screen: lexical diversity is a type-token ratio that falls mechanically as a document grows, readability variance saturates across very many paragraphs, and the optional perplexity engine may run out of its time budget before covering the whole text (the report says so when that happens). To analyze a book, run it a chapter at a time — that is both more accurate and tells you which chapter is the problem.
 
-Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional. reportPath writes the report to a file instead of returning it inline (e.g. "DETECT-AI.md").
+Input: { text? , filePath? , reportPath? , type? , ignoreMd? , weights? } — exactly one of text/filePath required; the rest optional. reportPath writes the report to a file instead of returning it inline (e.g. "DETECT-AI.md").
 
 'type' selects a ruleset ("creative" or "strategic") that reweights the signals and adjusts markdown/em-dash saturation thresholds for that genre — see the "Rulesets" section below. Omit it for genre-agnostic default weights.
+
+'weights' overrides one or more detector weights for this call only, keyed by detector id (e.g. { "readability-uniformity": 0.1 }). Applied after 'type' selects the ruleset's defaults, so it lets a caller start from a known baseline and adjust just the signals they want to change. An id that does not match any active detector is ignored, not rejected -- this lets a caller pass overrides for a plugin detector that may or may not be loaded. A negative weight throws. This never changes the server's actual defaults; it is scoped to the single call.
 
 'ignoreMd' strips literal '*', '_', and '#' characters before analysis, neutralizing the markdown-in-prose signal's header and bold-run counts (but not '-' bullet lines) — useful for manuscripts that legitimately use those characters for chapter headers or emphasis.
 
@@ -51,7 +57,9 @@ This module is intentionally extensible: each detector is an isolated file imple
 
 Rulesets: each detector file owns its own per-genre weight (and, where relevant, its own calibration thresholds), keyed by "default" | "creative" | "strategic":
 - creative: assumes fiction/narrative prose. Sentence-length and readability variance are expected (burstiness and readability weights raised); markdown and em dashes are strongly out of place (markdown saturates fast; em dashes are tolerated more since they're a legitimate stylistic device, but still weighted).
-- strategic: assumes business documents, presentations, or marketing copy. Structured markdown (bullets/headers) is a normal genre convention, so its weight and saturation threshold are relaxed; punchy, uniform sentences are normal (burstiness weight lowered); AI stock-phrase frequency is weighted heaviest, since business buzzwords overlap heavily with known LLM tells.`,
+- strategic: assumes business documents, presentations, or marketing copy. Structured markdown (bullets/headers) is a normal genre convention, so its weight and saturation threshold are relaxed; punchy, uniform sentences are normal (burstiness weight lowered); AI stock-phrase frequency is weighted heaviest, since business buzzwords overlap heavily with known LLM tells.
+
+The exact weight table (below this text) is generated live from each detector's own weight() function every time this topic is requested, never hand-copied, so it cannot drift from the values actually applied and reflects any plugin detector currently loaded from PLUGINS_DIR. Use the id column as the key for the 'weights' override parameter above.`,
 
   humanize_text: `humanize_text reuses detect_ai_usage's signals to produce concrete, actionable recommendations for making text read more naturally human. It does not rewrite the text — the caller decides how to apply each suggestion.
 
@@ -88,6 +96,12 @@ export function setUpdateNotice(latestVersion: string): void {
 
 export function getContext(topic?: string): string {
   const key = topic && topic in CONTEXT ? topic : "overview";
-  const body = CONTEXT[key];
+  // Computed here, at call time, rather than baked into the CONTEXT template
+  // literals above: those are built once when this module first loads, so an
+  // interpolation inside one would freeze at server-start values. Plugin
+  // detectors are scanned fresh from PLUGINS_DIR on every getDetectors() call
+  // specifically so they can be added without a restart -- baking the table
+  // in statically would silently exclude any plugin added after boot.
+  const body = key === "detect_ai_usage" ? `${CONTEXT[key]}\n\n${formatDetectorWeightsTable()}` : CONTEXT[key];
   return _updateNotice ? `${_updateNotice}${body}` : body;
 }

@@ -59,7 +59,30 @@ export interface DetectionReport {
   caveat: string;
 }
 
-export async function detectAiUsage(text: string, type?: DocumentType, ignoreMd?: boolean): Promise<DetectionReport> {
+/**
+ * Per-call weight overrides, keyed by detector `id` (see each detector's
+ * `id` field, or `listDetectorWeights()`/`formatDetectorWeightsTable()`
+ * below for the full list with their ruleset defaults). A key not matching
+ * any active detector is ignored rather than rejected, so a caller can pass
+ * overrides for a plugin that may or may not be loaded. The per-detector,
+ * per-ruleset WEIGHT tables hardcoded in each detector file remain the
+ * defaults — this only overrides them for the current call, so tuning a
+ * weight never requires a rebuild.
+ */
+export type WeightOverrides = Record<string, number>;
+
+export async function detectAiUsage(
+  text: string,
+  type?: DocumentType,
+  ignoreMd?: boolean,
+  weightOverrides?: WeightOverrides
+): Promise<DetectionReport> {
+  for (const [id, weight] of Object.entries(weightOverrides ?? {})) {
+    if (!Number.isFinite(weight) || weight < 0) {
+      throw new Error(`Invalid weight override for detector "${id}": ${weight}. Weights must be a non-negative number.`);
+    }
+  }
+
   const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
   const trimmed = workingText.trim();
   const ctx: DetectorContext = {
@@ -76,7 +99,9 @@ export async function detectAiUsage(text: string, type?: DocumentType, ignoreMd?
       .filter((d) => d.enabled)
       .map(async (d) => {
         const raw = await d.run(ctx);
-        return raw ? { ...raw, weight: d.weight(ctx.type) } : null;
+        if (!raw) return null;
+        const override = weightOverrides?.[d.id];
+        return { ...raw, weight: override ?? d.weight(ctx.type) };
       })
   );
   const detectors = results.filter((r): r is DetectorResult => r !== null);
@@ -128,5 +153,44 @@ export function formatDetectionReport(report: DetectionReport): string {
   }
   lines.push(``);
   lines.push(`Caveat: ${report.caveat}`);
+  return lines.join("\n");
+}
+
+export interface DetectorWeightRow {
+  id: string;
+  name: string;
+  default: number;
+  creative: number;
+  strategic: number;
+}
+
+/**
+ * Every active detector's id, name, and default weight per ruleset — read
+ * live from each detector's own `weight()` function, never hand-copied, so
+ * this can't drift from the actual WEIGHT tables the way a hardcoded list in
+ * documentation could. Used to render the table get_context shows, and to
+ * tell a caller what detector ids are valid keys for a weight override.
+ * Disabled detectors (paragraph coherence, the HTTP model runner) are
+ * omitted, since they never contribute a weight to a real report.
+ */
+export function listDetectorWeights(): DetectorWeightRow[] {
+  return getDetectors()
+    .filter((d) => d.enabled)
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      default: d.weight("default"),
+      creative: d.weight("creative"),
+      strategic: d.weight("strategic"),
+    }));
+}
+
+export function formatDetectorWeightsTable(): string {
+  const rows = listDetectorWeights();
+  const idWidth = Math.max(...rows.map((r) => r.id.length));
+  const lines = [
+    "Default weight per ruleset, by detector id (override any of these for one call via the 'weights' parameter):",
+    ...rows.map((r) => `  ${r.id.padEnd(idWidth)}  default ${r.default}  creative ${r.creative}  strategic ${r.strategic}  (${r.name})`),
+  ];
   return lines.join("\n");
 }

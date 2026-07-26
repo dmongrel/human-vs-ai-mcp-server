@@ -513,3 +513,68 @@ test("readability uniformity still separates varied prose from uniform prose", a
   const uniformScore = findDetector(await detectAiUsage(uniform), "readability uniformity").score;
   assert.ok(uniformScore > variedScore + 0.3, `expected a clear gap, got uniform ${uniformScore} vs varied ${variedScore}`);
 });
+
+// --- Per-call weight overrides ---
+
+test("a weight override changes that detector's contributed weight and the overall score", async () => {
+  const withoutOverride = await detectAiUsage(HUMAN_TEXT, "creative");
+  const burstinessBefore = findDetector(withoutOverride, "sentence-length burstiness");
+  assert.ok(burstinessBefore.weight > 0, "expected burstiness to carry weight by default");
+
+  const zeroed = await detectAiUsage(HUMAN_TEXT, "creative", undefined, { burstiness: 0 });
+  const burstinessAfter = findDetector(zeroed, "sentence-length burstiness");
+  assert.equal(burstinessAfter.weight, 0);
+  // Score itself must have shifted, not just the reported weight, since the
+  // weighted average is recomputed from the same overridden weights.
+  assert.notEqual(zeroed.overallScore, withoutOverride.overallScore);
+
+  const boosted = await detectAiUsage(HUMAN_TEXT, "creative", undefined, { "em-dash": 5 });
+  assert.equal(findDetector(boosted, "em dash overuse").weight, 5);
+});
+
+test("a weight override does not affect other detectors' weights", async () => {
+  const report = await detectAiUsage(HUMAN_TEXT, "creative", undefined, { burstiness: 0 });
+  const lexdiv = findDetector(report, "lexical diversity");
+  const withoutOverride = findDetector(await detectAiUsage(HUMAN_TEXT, "creative"), "lexical diversity");
+  assert.equal(lexdiv.weight, withoutOverride.weight);
+});
+
+test("an override for an id that matches no active detector is ignored, not rejected", async () => {
+  const report = await detectAiUsage(HUMAN_TEXT, "creative", undefined, { "not-a-real-detector-id": 5 });
+  assert.ok(report.overallScore >= 0); // did not throw
+  assert.equal(report.detectors.find((d) => d.name === ("not-a-real-detector-id" as string)), undefined);
+});
+
+test("a negative weight override throws rather than silently applying", async () => {
+  await assert.rejects(() => detectAiUsage(HUMAN_TEXT, "creative", undefined, { burstiness: -1 }), /Invalid weight override/);
+});
+
+test("a non-finite weight override throws", async () => {
+  await assert.rejects(() => detectAiUsage(HUMAN_TEXT, undefined, undefined, { burstiness: NaN }), /Invalid weight override/);
+});
+
+// --- listDetectorWeights / formatDetectorWeightsTable ---
+
+test("listDetectorWeights reports every enabled core detector with its three ruleset weights", async () => {
+  const { listDetectorWeights } = await import("./detectAiUsage.js");
+  const rows = listDetectorWeights();
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  assert.ok(byId.has("burstiness"));
+  assert.ok(byId.has("readability-uniformity"));
+  assert.equal(byId.get("readability-uniformity")?.default, 0.1);
+  assert.equal(byId.get("readability-uniformity")?.creative, 0.1);
+  assert.equal(byId.get("readability-uniformity")?.strategic, 0.1);
+
+  // Disabled detectors never contribute a real weight and must not appear.
+  assert.ok(!byId.has("model-runner-perplexity"), "the disabled HTTP model-runner detector should be excluded");
+  assert.ok(!byId.has("paragraph-coherence"), "the disabled paragraph-coherence detector should be excluded");
+});
+
+test("formatDetectorWeightsTable lists every row with its id and all three weights", async () => {
+  const { formatDetectorWeightsTable, listDetectorWeights } = await import("./detectAiUsage.js");
+  const table = formatDetectorWeightsTable();
+  for (const row of listDetectorWeights()) {
+    assert.ok(table.includes(row.id), `expected the table to mention detector id "${row.id}"`);
+  }
+});

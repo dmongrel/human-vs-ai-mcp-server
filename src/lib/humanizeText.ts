@@ -5,7 +5,7 @@
 // layer doesn't have.
 
 import { countAiTellPhrases } from "./aiPhrases.js";
-import { detectAiUsage, type DocumentType } from "./detectAiUsage.js";
+import { detectAiUsage, type DocumentType, type WeightOverrides } from "./detectAiUsage.js";
 import { fleschReadingEase, mean, splitParagraphs, splitSentences, stdev, stripMarkdownMarkup, tokenizeWords } from "./text.js";
 
 export interface HumanizeRecommendation {
@@ -41,9 +41,14 @@ const HUMANIZE_PROFILES: Record<"default" | DocumentType, HumanizeProfile> = {
   strategic: { sentenceCovThreshold: 0.2, readabilityStdevThreshold: 3, flagMarkdown: false, emDashPer1000Threshold: 0, hedgeCountThreshold: 2 },
 };
 
-export async function humanizeText(text: string, type?: DocumentType, ignoreMd?: boolean): Promise<HumanizeReport> {
+export async function humanizeText(
+  text: string,
+  type?: DocumentType,
+  ignoreMd?: boolean,
+  weightOverrides?: WeightOverrides
+): Promise<HumanizeReport> {
   const workingText = ignoreMd ? stripMarkdownMarkup(text) : text;
-  const detection = await detectAiUsage(workingText, type);
+  const detection = await detectAiUsage(workingText, type, undefined, weightOverrides);
   const profile = HUMANIZE_PROFILES[type ?? "default"];
   const sentences = splitSentences(workingText);
   const words = tokenizeWords(workingText);
