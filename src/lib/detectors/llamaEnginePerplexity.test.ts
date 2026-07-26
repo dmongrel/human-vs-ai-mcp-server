@@ -42,10 +42,17 @@ test("the detector's id does not collide with the HTTP model-runner detector", (
   assert.ok(ids.includes("model-runner-perplexity"), "the HTTP model-runner detector must remain registered");
 });
 
-test("the HTTP model-runner detector is still disabled", () => {
+test("the HTTP model-runner detector carries less weight than this one", () => {
+  // Both perplexity signals are enabled, but they are not equally trustworthy:
+  // the HTTP one reads logprobs off the model's own greedy reproduction, which
+  // is near-certain by construction, while this one is teacher-forced. The
+  // weighting must keep reflecting that.
   const httpDetector = CORE_DETECTORS.find((d) => d.id === "model-runner-perplexity");
   assert.ok(httpDetector);
-  assert.equal(httpDetector!.enabled, false);
+  assert.ok(
+    httpDetector!.weight("default") < llamaEnginePerplexityDetector.weight("default"),
+    "the biased HTTP signal must not outweigh teacher-forced scoring"
+  );
 });
 
 test("the detector has a weight for every ruleset", () => {

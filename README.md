@@ -20,7 +20,7 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 - [Tools](#tools)
 - [Plugins](#plugins)
 - [Bundled engine perplexity — **the active** LLM-based signal](#bundled-engine-perplexity)
-- [HTTP model runner — a different, **abandoned** approach](#model-runner-currently-disabled)
+- [HTTP model runner — a second, opt-in signal with a **biased** technique](#model-runner-http-opt-in)
 - [Testing](#testing)
 - [Design principles](#design-principles)
 
@@ -32,13 +32,13 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 
 **Tools:** `detect_ai_usage`, `humanize_text`, `get_context` — all implemented.
 
-**Signals:** 8 active, 2 deliberately disabled.
+**Signals:** 9 active, 1 deliberately disabled.
 
 | | signal | state |
 |---|---|---|
 | ✅ | sentence-length burstiness, lexical diversity, AI stock phrases, readability uniformity, markdown-in-prose, em dash overuse, n-gram repetition | active |
 | ✅ | bundled llama.cpp engine perplexity | active; contributes only when `LLAMA_ENGINE_MODEL_PATH` is set |
-| ❌ | HTTP model-runner perplexity | disabled — technique is structurally broken ([why](#model-runner-currently-disabled)) |
+| ⚠️ | HTTP model-runner perplexity | active when `MODEL_RUNNER_URL` is set; works, but its scoring technique is biased ([why](#model-runner-http-opt-in)) |
 | ❌ | paragraph coherence | disabled — premise measured and did not hold for narrative prose |
 
 Third parties can add signals without forking, via [`PLUGINS_DIR`](#plugins).
@@ -191,7 +191,7 @@ The built-in signals live under `src/lib/detectors/` and are registered in `src/
 | `emDash.ts` | Em dash ("—") frequency |
 | `ngramRepetition.ts` | Trigram (3-word sequence) diversity |
 | `paragraphCoherence.ts` | Adjacent-paragraph content-word cosine similarity |
-| `modelPerplexity.ts` | Real perplexity via a local model runner — **disabled by default**, see [below](#model-runner-currently-disabled) |
+| `modelPerplexity.ts` | Real perplexity via a local model runner — **disabled by default**, see [below](#model-runner-http-opt-in) |
 
 Every one of these is a normal consumer of the same `Detector` interface described above — there's no special-cased "built-in" path a plugin can't also take.
 
@@ -229,11 +229,15 @@ module.exports.detector = {
 
 ---
 
-## Model runner (currently disabled)
+## Model runner (HTTP, opt-in)
 
-> **Not the LLM signal this tool actually uses.** That is [Bundled engine perplexity](#bundled-engine-perplexity), which is **enabled** and does proper teacher-forced scoring. This section documents a *different*, earlier attempt — perplexity over HTTP against an external model runner — that was investigated and abandoned. If you are looking for how the working perplexity detector behaves, you want the other section.
+> **Not the perplexity signal to rely on.** That is [Bundled engine perplexity](#bundled-engine-perplexity), which does teacher-forced scoring with no generation step. This one is a second, HTTP-based signal whose scoring technique is known to be biased — read the caveat below before using its number for anything.
 
-An optional **detection signal** — a real perplexity check against a language model, rather than a stylometric proxy for one — was investigated, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). **It's implemented but disabled by default** (`enabled: false` in `src/lib/detectors/modelPerplexity.ts`) after investigation found it unreliable in practice. The client code (`src/lib/modelRunner.ts`) is kept as groundwork in case a better technique or runner support emerges later. With the signal disabled, the tools behave exactly as described above, with zero network calls — this section is documentation of the investigation, not a currently-usable feature.
+A second **detection signal** — a perplexity check against a language model over HTTP, using a local, OpenAI-compatible model runner such as [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.com/). It is **enabled but opt-in**: with `MODEL_RUNNER_URL` unset it makes no network call, returns nothing, and is absent from the report at zero cost. Set that variable and the signal appears, contributing a flat 15% weight.
+
+**It works, and its number is still not trustworthy.** Verified end-to-end against a live LM Studio instance: it reaches the runner, gets real logprobs back, and returns a perplexity. But the technique reads those logprobs off the model's *own reproduction* of your text, generated at temperature 0. Greedy decoding always picks the model's argmax token, so the tokens being scored are near-certain by construction and perplexity collapses toward 1.0 almost regardless of what the text says — in testing, three differently-worded human chapters returned effectively identical values, and a real chapter scored 1.0. Treat it as diagnostic output, not evidence. If you want a perplexity number that discriminates, use the bundled engine.
+
+The section below documents the investigation that established this, and is worth reading before you weigh the signal's output.
 
 ### What was tried
 
@@ -275,7 +279,7 @@ Other directions worth exploring instead, not yet tried here: llama.cpp's native
 
 ## Bundled engine perplexity
 
-> **This is the LLM-based signal the tool uses, and it is enabled.** It ships with the package on Windows x64 and needs only a `.gguf` model path to activate. Do not confuse it with [Model runner](#model-runner-currently-disabled), a separate abandoned experiment.
+> **This is the perplexity signal to rely on.** It ships with the package on Windows x64 and needs only a `.gguf` model path to activate. Do not confuse it with [Model runner](#model-runner-http-opt-in), a separate HTTP-based signal whose technique is biased.
 
 A second, independent perplexity signal — this one measuring perplexity properly. Where the model-runner path above asks a chat model to echo text back and reads logprobs off its own generation (which greedy decoding makes meaningless), this path does **teacher-forced** scoring: the actual text is fed through the model and the model's probability for each *real* next token is read directly. No generation step, so none of the structural bias. This is the same technique llama.cpp's own `llama-perplexity` CLI uses.
 

@@ -182,24 +182,31 @@ afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
 });
 
-test("model-perplexity recommendation stays disabled even when the runner is configured and would succeed", async () => {
+test("model-perplexity recommendation appears when the runner is configured and the text scores predictable", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  let fetchCalled = false;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
-    fetchCalled = true;
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
     const body = JSON.parse(String(init?.body ?? "{}"));
     const chunk = body.messages?.[1]?.content ?? "";
-    // Very low (near-zero) negative logprobs -> would be low perplexity -> high AI-likelihood score, if enabled.
+    // Near-zero negative logprobs -> low perplexity -> high AI-likelihood score.
     return jsonResponse({
       choices: [{ message: { content: chunk }, logprobs: { content: [{ logprob: -0.1 }, { logprob: -0.1 }, { logprob: -0.1 }] } }],
     });
   }) as typeof fetch;
 
   const report = await humanizeText("Some ordinary text to analyze for this test.");
-  // The model-runner signal is disabled via `enabled: false` on the detector
-  // itself (src/lib/detectors/modelPerplexity.ts), so the orchestrator filters
-  // it out before run() and no request is ever made.
+  assert.ok(findRecommendation(report, "Text is unusually predictable to the configured local model"));
+});
+
+test("model-perplexity recommendation is absent, with no network call, when no runner is configured", async () => {
+  delete process.env.MODEL_RUNNER_URL;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("should not reach the network");
+  }) as unknown as typeof fetch;
+
+  const report = await humanizeText("Some ordinary text to analyze for this test.");
   assert.equal(findRecommendation(report, "Text is unusually predictable to the configured local model"), undefined);
-  assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
+  assert.equal(fetchCalled, false, "expected no network call when no runner is configured");
 });

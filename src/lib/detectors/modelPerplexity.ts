@@ -1,15 +1,26 @@
-// Model-runner perplexity: CURRENTLY DISABLED (enabled: false below). See
-// ../modelRunner.ts's module comment and README.md's "Model runner
-// (currently disabled)" section for the full investigation. Investigated as
-// a real perplexity check against a local model runner (LM Studio, Ollama),
-// but found unreliable in practice: (a) the verbatim-echo technique it
-// relies on is structurally biased toward near-zero perplexity for any text
-// the model successfully reproduces at temperature 0 (greedy decoding always
-// picks its own argmax token), regardless of the text's actual content, and
-// (b) it was impractically slow against every runner/model tested. The
-// client code is kept as groundwork in case a better scoring technique or
-// runner support emerges later. Do not flip `enabled` to true without
-// reading the README section first.
+// Model-runner perplexity: ENABLED, but opt-in and inert unless
+// MODEL_RUNNER_URL is set. See ../modelRunner.ts's module comment and
+// README.md's "Model runner" section for the full investigation.
+//
+// READ THIS BEFORE TRUSTING ITS NUMBER. The signal is mechanically
+// functional -- it reaches a local runner, gets real logprobs back, and
+// returns a perplexity -- but its scoring technique is known to be
+// structurally biased, and being enabled does not change that:
+//
+//   (a) It reads logprobs off the model's own reproduction of the text.
+//       Reproduction runs at temperature 0, where greedy decoding always
+//       picks the model's argmax token, so the tokens it scores are
+//       near-certain by construction. Perplexity therefore collapses toward
+//       zero for any text the model reproduces successfully, largely
+//       independent of what the text actually says. Three differently-worded
+//       human chapters returned effectively identical values in testing.
+//   (b) It is slow against every runner tested, since it requires generating
+//       the whole text back.
+//
+// It is enabled because it works and is opt-in, not because the number is
+// sound. ../llamaEnginePerplexity.ts does teacher-forced scoring with no
+// generation step and is the perplexity signal to rely on. Treat this one's
+// output as diagnostic, and keep its weight low.
 
 import { scorePerplexity } from "../modelRunner.js";
 import { clamp } from "../text.js";
@@ -31,7 +42,7 @@ const PERPLEXITY_HUMAN_LIKE_ANCHOR = 40;
 export const modelPerplexityDetector: Detector = {
   id: "model-runner-perplexity",
   name: "model-runner perplexity",
-  enabled: false,
+  enabled: true,
   weight: (type) => WEIGHT[type],
   run: async (ctx) => {
     const result = await scorePerplexity(ctx.text);

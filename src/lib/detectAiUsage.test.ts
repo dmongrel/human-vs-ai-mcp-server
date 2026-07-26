@@ -354,11 +354,9 @@ afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
 });
 
-test("model-runner perplexity detector stays disabled even when the runner is configured and would succeed", async () => {
+test("model-runner perplexity detector contributes when the runner is configured", async () => {
   process.env.MODEL_RUNNER_URL = "http://localhost:1234";
-  let fetchCalled = false;
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
-    fetchCalled = true;
     if (String(url).includes("/v1/models")) return jsonResponse({ data: [{ id: "test-model" }] });
     const body = JSON.parse(String(init?.body ?? "{}"));
     const chunk = body.messages?.[1]?.content ?? "";
@@ -368,15 +366,27 @@ test("model-runner perplexity detector stays disabled even when the runner is co
   }) as typeof fetch;
 
   const report = await detectAiUsage(HUMAN_TEXT);
-  // Disabled via the modelPerplexityDetector's `enabled: false` — see
-  // src/lib/detectors/modelPerplexity.ts. Found unreliable in practice
-  // (structural bias + impractically slow against every runner/model
-  // tested); kept off, not removed, in case a fix is found later.
+  const detector = report.detectors.find((d) => d.name === "model-runner perplexity");
+  assert.ok(detector, "expected the signal to be present when MODEL_RUNNER_URL is set");
+  assert.equal(report.detectors.length, 8);
+  const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
+  assert.ok(Math.abs(totalWeight - 1.25) < 1e-9, `unexpected total weight ${totalWeight}`);
+});
+
+test("model-runner perplexity detector is absent, and makes no network call, when MODEL_RUNNER_URL is unset", async () => {
+  // The signal is enabled but opt-in: with no runner configured it must cost
+  // nothing at all, since every user who has not opted in still runs this path.
+  delete process.env.MODEL_RUNNER_URL;
+  let fetchCalled = false;
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    throw new Error("should not reach the network");
+  }) as unknown as typeof fetch;
+
+  const report = await detectAiUsage(HUMAN_TEXT);
   assert.equal(report.detectors.find((d) => d.name === "model-runner perplexity"), undefined);
   assert.equal(report.detectors.length, 7);
-  assert.equal(fetchCalled, false, "expected no network call to be attempted while the signal is disabled");
-  const totalWeight = report.detectors.reduce((a, d) => a + d.weight, 0);
-  assert.ok(Math.abs(totalWeight - 1.1) < 1e-9);
+  assert.equal(fetchCalled, false, "expected no network call when no runner is configured");
 });
 
 // --- N-gram repetition detector ---
