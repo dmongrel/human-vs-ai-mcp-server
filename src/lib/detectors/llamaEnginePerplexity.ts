@@ -109,7 +109,7 @@ export const llamaEnginePerplexityDetector: Detector = {
     return {
       name: "llama-engine perplexity",
       score: perplexityToScore(perplexity),
-      detail: `Teacher-forced perplexity ${perplexity.toFixed(1)} against the bundled llama.cpp engine${modelNote}${coverageNote}. Lower perplexity (the text was more predictable to the model) suggests AI generation. Absolute values are model-specific, and this signal's thresholds were calibrated against a 1.5B model on a small sample — treat it as corroborating evidence, not a verdict.`,
+      detail: `Teacher-forced perplexity ${perplexity.toFixed(1)} against the bundled llama.cpp engine${modelNote}${coverageNote}. Lower perplexity (the text was more predictable to the model) suggests AI generation. Absolute values are model-specific. Thresholds were fitted to 25 published novelists measured on a 1.5B model, who ranged 15.7-38.7 — a spread ordered more by prose ornateness than by authorship, so plainly-written human text scores AI-like here, and only models below ~13 perplexity are separable at all. Corroborating evidence, not a verdict.`,
     };
   },
 };
