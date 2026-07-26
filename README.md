@@ -28,7 +28,15 @@ Written in TypeScript, it runs on Node.js using the stdio transport protocol, ma
 
 ## Status
 
-This project is under active development and **not yet published to npm** (no version has been tagged/released — that's intentional until the tool set is considered stable). Clone and build it locally for now; npm registry support is already wired up in `package.json` for when that day comes.
+Published on npm as [`human-vs-ai-mcp-server`](https://www.npmjs.com/package/human-vs-ai-mcp-server):
+
+```
+npm install -g human-vs-ai-mcp-server
+```
+
+On Windows x64 that also pulls the prebuilt llama.cpp engine automatically (a ~24 MB optional dependency) — no Go toolchain, no compiler, no separate llama.cpp install. On other platforms the engine is skipped and the remaining signals work normally. The perplexity signal additionally needs a `.gguf` model you supply yourself; see [Bundled engine perplexity](#bundled-engine-perplexity).
+
+This project is still under active development at `0.0.x` — expect the tool set to change.
 
 ## Installation
 
@@ -296,7 +304,7 @@ Windows x64 only for now. On any other platform the optional dependency isn't in
 ### Turning it on
 
 1. Build the native helper: `npm run build:native` (needs Go 1.26+ and PowerShell; downloads the pinned llama.cpp release).
-2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model. Until this package is published, also set `LLAMA_ENGINE_HELPER_PATH` to `packages/win32-x64/llama-engine-helper.exe` - the platform package it would otherwise resolve isn't on npm yet.
+2. Point `LLAMA_ENGINE_MODEL_PATH` at a `.gguf` model. That is the only variable an installed copy needs — the helper resolves from the platform package automatically. `LLAMA_ENGINE_HELPER_PATH` is only for pointing at a locally built helper when working from a clone.
 3. Keep `LLAMA_ENGINE_CTX_SIZE` at 512 if you're using the shipped anchors. They were measured at that chunk size, and changing it changes the numbers.
 
 **If you point it at a different model, re-measure.** Score a corpus of known-human and known-AI
