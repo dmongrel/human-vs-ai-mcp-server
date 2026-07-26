@@ -90,12 +90,36 @@ test("em dash detector scores high for heavy em dash use and reports no hits for
   const heavy = await detectAiUsage("This is a sentence — with an em dash — and another — right here — for emphasis — repeatedly.");
   const heavyDetector = findDetector(heavy, "em dash overuse");
   assert.ok(heavyDetector.score > 0.5, `expected high em-dash score, got ${heavyDetector.score}`);
-  assert.match(heavyDetector.detail, /em dashes/);
+  assert.match(heavyDetector.detail, /dashes/);
 
   const clean = await detectAiUsage(HUMAN_TEXT);
   const cleanDetector = findDetector(clean, "em dash overuse");
   assert.equal(cleanDetector.score, 0);
-  assert.match(cleanDetector.detail, /No em dashes detected/);
+  assert.match(cleanDetector.detail, /No em or en dashes detected/);
+});
+
+test("em dash detector counts whitespace-flanked en dashes as the same tell", async () => {
+  // A local llama-3-8b chapter used en dashes (U+2013) throughout instead of
+  // em dashes, at 12 per 1000 words, and the detector reported nothing.
+  const text = "This is a sentence – with an en dash – and another – right here – for emphasis – repeatedly.";
+  const detector = findDetector(await detectAiUsage(text), "em dash overuse");
+  assert.ok(detector.score > 0.5, `expected en dashes to register, got ${detector.score}`);
+  assert.match(detector.detail, /en dash/);
+});
+
+test("em dash detector ignores en dashes used as number ranges", async () => {
+  // "1914–18" is ordinary typography, not a parenthetical pause, so it must
+  // not be counted. Only a whitespace-flanked en dash stands in for an em dash.
+  const text = "The war ran 1914–18 and the survey covered pages 40–65 across the 2019–2020 period, which the team documented carefully in a report nobody read.";
+  const detector = findDetector(await detectAiUsage(text), "em dash overuse");
+  assert.equal(detector.score, 0);
+  assert.match(detector.detail, /No em or en dashes detected/);
+});
+
+test("em dash detector counts em and en dashes together", async () => {
+  const text = "One clause — then another – and a third — closing it out here with enough words to make a sentence.";
+  const detector = findDetector(await detectAiUsage(text), "em dash overuse");
+  assert.match(detector.detail, /3 dashes/);
 });
 
 test("report echoes back the type used, defaulting to 'default'", async () => {
