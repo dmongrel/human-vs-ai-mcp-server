@@ -82,3 +82,4 @@ jobs:
           else
             npm publish
           fi
+      - run: node scripts/release-reminder.js

@@ -20,8 +20,8 @@
     "test": "node --test \"dist-test/**/*.test.js\"",
     "prepublishOnly": "npm run build",
     "check:native": "node scripts/check-native-package.js",
-    "release": "npm run build && npm run build:native && npm run check:native && npm publish ./packages/win32-x64 && npm publish",
-    "release:dry": "npm run build && npm run check:native && npm publish ./packages/win32-x64 --dry-run && npm publish --dry-run"
+    "release": "npm run build && npm run build:native && npm run check:native && npm publish ./packages/win32-x64 && npm publish && node scripts/release-reminder.js",
+    "release:dry": "npm run build && npm run check:native && npm publish ./packages/win32-x64 --dry-run && npm publish --dry-run && node scripts/release-reminder.js --dry"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
