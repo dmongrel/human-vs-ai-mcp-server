@@ -67,7 +67,20 @@ npm install -g human-vs-ai-mcp-server
 
 On Windows x64 this also installs `human-vs-ai-mcp-server-win32-x64`, the prebuilt llama.cpp engine, as an optional dependency — roughly 24 MB, no Go toolchain or compiler needed. Elsewhere npm skips it and the eight stylometric signals work as normal.
 
-To update later: `npm update -g human-vs-ai-mcp-server`
+**To update, reinstall rather than update:**
+
+```bash
+npm uninstall -g human-vs-ai-mcp-server
+npm install -g human-vs-ai-mcp-server
+```
+
+This matters. `npm update -g` (and `npm install -g …@latest` over an existing copy) has been observed to bump the main package while **failing to install the matching engine package** — it removes the old one and never adds the new one. Because optional dependencies and the engine client both fail open, nothing errors: the tool keeps working with the perplexity signal silently missing. A clean reinstall installs both correctly.
+
+To check which engine you have, if any:
+
+```bash
+node -e "console.log(require('human-vs-ai-mcp-server-win32-x64/package.json').version)"
+```
 
 ### From source
 
