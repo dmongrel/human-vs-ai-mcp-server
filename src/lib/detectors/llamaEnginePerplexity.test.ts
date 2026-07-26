@@ -66,7 +66,7 @@ test("perplexityToScore reports high perplexity as human-like", () => {
 test("perplexityToScore decreases strictly between the anchors", () => {
   // Inside the anchor range the mapping must discriminate; outside it the
   // score saturates at 1 and 0 by design, so strictness only holds here.
-  // These values sit between the measured AI and human anchors (16 / 28).
+  // These values sit between the measured AI and human anchors (6 / 30).
   const scores = [17, 19, 21, 24, 27].map(perplexityToScore);
   for (let i = 1; i < scores.length; i++) {
     assert.ok(scores[i] < scores[i - 1], `expected a lower score at index ${i}: ${scores.join(", ")}`);
@@ -83,32 +83,52 @@ test("perplexityToScore never increases with perplexity, including outside the a
 // Every perplexity measured against Qwen2.5-1.5B-Instruct.Q4_K_M — see
 // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md.
 const MEASURED_HUMAN_CHAPTERS = [24.1, 28.6, 20.9, 21.7, 24.2, 27.0, 23.0, 21.8, 21.9, 20.2, 19.6, 24.5];
-const MEASURED_AI_EXCERPTS = [15.81, 17.66, 19.33];
 
-test("no measured human chapter is scored as AI-leaning", () => {
+// Mid-book excerpts from 25 distinct published novelists. This is the widest
+// human sample taken and the one the anchors are fitted to; Anderson's 15.71
+// is the floor the AI-like anchor has to sit below.
+const MEASURED_HUMAN_AUTHORS = [
+  15.71, 17.07, 19.25, 19.51, 19.98, 20.65, 21.05, 22.11, 22.32, 24.29, 24.4, 24.53, 24.78,
+  24.98, 25.28, 25.87, 27.03, 29.17, 30.32, 30.75, 31.25, 31.26, 35.18, 36.87, 38.74,
+];
+
+// Locally-runnable open models, the only group this signal reliably catches.
+const MEASURED_LOCAL_MODEL_AI = [5.7, 7.2];
+
+test("no measured human text is scored as AI-leaning", () => {
   // The failure this guards against is the expensive one: calling a real
-  // author's chapter machine-written. Human chapters run down to 19.6, so
-  // anchors tight enough to flag them would be actively harmful.
-  for (const ppl of MEASURED_HUMAN_CHAPTERS) {
-    assert.ok(perplexityToScore(ppl) <= 0.5, `human chapter perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
+  // author's prose machine-written. This is why the anchors moved to 6/30 —
+  // at 12/32 seven of the 25 novelists tripped this, Anderson at 0.73.
+  for (const ppl of [...MEASURED_HUMAN_CHAPTERS, ...MEASURED_HUMAN_AUTHORS]) {
+    assert.ok(perplexityToScore(ppl) <= 0.5, `human perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
   }
 });
 
-test("measured AI excerpts still score as AI-leaning", () => {
-  for (const ppl of MEASURED_AI_EXCERPTS) {
+test("locally-runnable model output still scores as AI-leaning", () => {
+  for (const ppl of MEASURED_LOCAL_MODEL_AI) {
     assert.ok(perplexityToScore(ppl) > 0.5, `AI perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
   }
 });
 
-test("the AI and human groups stay meaningfully apart on average", () => {
-  // Deliberately a comparison of means, not of ranges: at chapter level the
-  // two groups overlap (an AI chapter measured 21.2, inside the human spread),
-  // so any test asserting clean separation would be encoding a claim the data
-  // does not support.
+test("the signal does not claim to separate text inside the overlap zone", () => {
+  // Deliberately asserts the limitation rather than papering over it. These
+  // are measured AI perplexities (three excerpts at 15.8-19.3 and Claude Opus
+  // 5 at 21.2) that fall inside the human author range of 15.7-38.7 — they
+  // interleave with Anderson 15.71, Christie 17.07 and Wharton 19.25. Any
+  // anchor pair that flagged these would flag those novelists too. If a future
+  // change makes this test fail, the human corpus above is being mis-scored.
+  for (const ppl of [15.81, 17.66, 19.33, 21.2]) {
+    assert.ok(perplexityToScore(ppl) <= 0.5, `overlap-zone perplexity ${ppl} scored ${perplexityToScore(ppl)}`);
+  }
+});
+
+test("the local-model and human groups stay meaningfully apart on average", () => {
+  // A comparison of means, not of ranges: the groups overlap, so any test
+  // asserting clean separation would encode a claim the data does not support.
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-  const humanMean = mean(MEASURED_HUMAN_CHAPTERS.map(perplexityToScore));
-  const aiMean = mean(MEASURED_AI_EXCERPTS.map(perplexityToScore));
-  assert.ok(aiMean - humanMean > 0.15, `expected a clear gap in means, got AI ${aiMean.toFixed(2)} vs human ${humanMean.toFixed(2)}`);
+  const humanMean = mean(MEASURED_HUMAN_AUTHORS.map(perplexityToScore));
+  const aiMean = mean(MEASURED_LOCAL_MODEL_AI.map(perplexityToScore));
+  assert.ok(aiMean - humanMean > 0.5, `expected a clear gap in means, got AI ${aiMean.toFixed(2)} vs human ${humanMean.toFixed(2)}`);
 });
 
 test("perplexityToScore stays within 0..1", () => {

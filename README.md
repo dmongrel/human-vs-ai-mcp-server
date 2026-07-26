@@ -231,7 +231,9 @@ The engine ships inside the package (as an `optionalDependency` installed only o
 
 Unlike the model-runner path, this signal demonstrably discriminates. Scored against `Qwen2.5-1.5B-Instruct.Q4_K_M`, a famous Dickens opening returns a perplexity of 1.7, LLM-flavoured boilerplate 11.3, idiosyncratic human prose 46.9, and random word salad 4016 — roughly three orders of magnitude of spread.
 
-On a matched-sample comparison with the same model, three human excerpts scored 24.1-27.3 and three AI-written passages of the same genre and length scored 15.8-19.3, with no overlap. Wider chapter-level measurement put twelve human chapters at 19.6-28.6, and the anchors were loosened to match (12 AI-like, 32 human-like). **That is still a thin sample from few authors** — enough to show the signal separates, not enough to know how wide either distribution really is. Full measurements and caveats are in [`docs/superpowers/notes/2026-07-25-llama-engine-calibration.md`](./docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
+The anchors have been refitted twice as the human sample widened, and each time the human distribution proved broader than the sample before it showed. They now rest on **25 distinct published novelists** — mid-book excerpts from Project Gutenberg, Austen through Fitzgerald — which measured **15.7–38.7**, about twice the spread implied by the earlier handful of samples. Anchors are 6 (AI-like) and 30 (human-like). Full measurements and caveats are in [`docs/superpowers/notes/2026-07-25-llama-engine-calibration.md`](./docs/superpowers/notes/2026-07-25-llama-engine-calibration.md).
+
+Sampling mid-book is deliberate. Famous openings are partly memorized by the scoring model and read ~10 perplexity points low (Austen's opening 12.4 versus 23.6 mid-book), so any corpus built from first pages would be badly skewed.
 
 ### What it can and cannot catch
 
@@ -245,6 +247,10 @@ Detection difficulty scales with the model that wrote the text, and the gap is l
 | human chapters (n=12) | 19.6-28.6 | 6-22 |
 
 Small and mid-size open models are three to four times more predictable than any human chapter measured, saturating the signal. Frontier output sits **inside** the human range, and no threshold separates it — on this signal, text from a frontier model is indistinguishable from human prose. Read a low score as "not written by a small local model", not as "written by a human".
+
+The 25-author corpus sharpened this. The signal only separates text below roughly 13 perplexity; above that, AI and human measurements interleave outright. Sherwood Anderson measures 15.71 and an AI-written excerpt measures 15.81 — they receive the same score, because on this measurement they are the same. Anchors tight enough to flag that excerpt also flagged seven of the 25 novelists, so the anchors gave way instead.
+
+**And the signal is partly measuring prose style, not authorship.** Ranked by perplexity, the corpus sorts by ornateness: plain modern declarative writing at the bottom (Anderson, Christie), ornate Victorian subordination at the top (Melville 38.7, Hardy 36.9, James 35.2). A plain contemporary stylist scores AI-like regardless of who wrote the text. Recalibration cannot fix that — it is what the measurement is.
 
 The comparison also disproves the obvious confound: qwen3-14b shares its lineage with the Qwen scorer and still scored *higher* (less predictable) than llama-3-8b, so the signal is not measuring shared tokenizer or training family. One chapter per author, one genre, one prompt — and the Claude sample was written with knowledge of what these detectors measure.
 

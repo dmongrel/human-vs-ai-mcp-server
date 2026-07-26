@@ -41,30 +41,45 @@ const WEIGHT: Record<"default" | DocumentType, number> = {
 // Anchors measured against **Qwen2.5-1.5B-Instruct.Q4_K_M** — see
 // docs/superpowers/notes/2026-07-25-llama-engine-calibration.md.
 //
-// These were first fitted to 1,200-word excerpts, where AI text scored
-// 15.8-19.3 and human text 24.1-27.3 with no overlap, giving anchors of 16/28.
-// Testing whole chapters broke that picture: across 12 chapters from two
-// manuscripts, human perplexity ran **19.6-28.6**, and an AI-written chapter
-// measured 21.2 — inside the human spread. The groups genuinely overlap at
-// chapter level, and the tight anchors were scoring 3 of 12 real human
-// chapters as AI-leaning.
+// These have been refitted twice as the human sample widened, and each time
+// the human distribution turned out broader than the sample before it showed:
+// 16/28 (3 excerpts, one author), then 12/32 (12 chapters, two manuscripts),
+// now 6/30 against **25 distinct published novelists** — mid-book excerpts
+// from Project Gutenberg, spanning Austen to Fitzgerald.
 //
-// Widened to 12/32 accordingly. That eliminates the false positives (no
-// measured human chapter now exceeds 0.5) while keeping a ~22-point gap
-// between group means. The cost is a less decisive signal: AI text lands
-// around 56/100 rather than 75/100, which is the honest reflection of a
-// measurement whose two populations overlap.
+// That corpus measured **15.7-38.7**, roughly twice the spread the earlier
+// samples implied. The 12/32 anchors put the 0.5 crossover at 19.6, which
+// scored 7 of those 25 real novelists as AI-leaning — Sherwood Anderson at
+// 73/100 and Agatha Christie at 64/100. Calling a published human author
+// machine-written is the costly error for this tool, so the anchors give way.
 //
-// Still a working estimate. Four AI samples, two human authors, one genre, one
-// model — and perplexity does not transfer between models, so re-measure
-// before pointing this detector at a different .gguf.
+// 6/30 puts the crossover at 13.4, below the lowest human measurement. No
+// author in the corpus now exceeds 0.40.
+//
+// What that costs, stated plainly: this signal now only separates models
+// whose perplexity falls below ~13. Two local models (llama-3-8b at 5.7,
+// qwen3-14b at 7.2) score 100 and 89. Claude Opus 5 measured 21.2 — squarely
+// inside the human range — and now scores 22, indistinguishable from a human
+// author. Earlier AI excerpts measured 15.8-19.3, which interleaves with
+// Anderson (15.7), Christie (17.1) and Wharton (19.3). No anchor choice
+// separates those populations, because on this measurement they are not
+// separate.
+//
+// The ranking also shows what perplexity is really tracking: the bottom is
+// plain, modern, declarative prose (Anderson 1919, Christie 1920) and the top
+// is ornate Victorian subordination (Melville 38.7, Hardy 36.9, James 35.2).
+// Prose style drives this signal at least as much as authorship, so plain
+// contemporary human writing scores AI-like no matter who wrote it.
+//
+// Still one model and one language. Perplexity does not transfer between
+// models — re-measure before pointing this detector at a different .gguf.
 //
 // Low perplexity means the text was predictable to the model (AI-typical);
 // high means it surprised the model (human-typical). Interpolation is in log
 // space because perplexity is exponential in cross-entropy — the perceptual
 // distance from 5 to 10 is the same as from 10 to 20, not from 10 to 15.
-const PERPLEXITY_AI_LIKE_ANCHOR = 12;
-const PERPLEXITY_HUMAN_LIKE_ANCHOR = 32;
+const PERPLEXITY_AI_LIKE_ANCHOR = 6;
+const PERPLEXITY_HUMAN_LIKE_ANCHOR = 30;
 
 /** Map a raw perplexity to a 0 (human-like) .. 1 (AI-like) detector score. Exported for testing. */
 export function perplexityToScore(perplexity: number): number {

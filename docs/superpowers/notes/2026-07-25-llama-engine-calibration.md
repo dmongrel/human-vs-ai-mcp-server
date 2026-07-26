@@ -361,3 +361,91 @@ perplexity computed from the document's first 512 tokens only. Fixed by calling
 regression guard. The pre-fix numbers differed materially (one human sample read 35.60 on its
 first chunk alone versus 27.33 across the full text), so any measurement taken before that fix
 should be discarded.
+
+## Follow-up: widening the human corpus to 25 authors
+
+The largest recorded gap ("15-20 samples from clearly distinct writers") is now closed. Corpus:
+mid-book excerpts of ~1,200 words from 25 published novelists on Project Gutenberg, extracted
+with `~/.claude/scripts/gutenberg-excerpt.js`, all originally written in English (translations
+were excluded — they measure the translator's prose, not the author's).
+
+### First: is Gutenberg usable at all?
+
+A prior spot-check had a famous Dickens passage at perplexity 1.7, which would make any
+public-domain corpus worthless: memorized text scores as maximally AI. Tested directly by
+scoring each book's famous opening against a mid-book passage.
+
+| author | famous opening | mid-book |
+|---|---|---|
+| Dickens | 13.89 | 22.40 |
+| Austen | 12.41 | 23.55 |
+| Melville | 31.66 | 32.31 |
+
+Memorization is real but far weaker across 1,200 words than for a single hyper-quoted sentence:
+openings run ~10 points low, mid-book passages land in the normal human range. **Rule adopted:
+sample mid-book, never openings.** The 1.7 figure was a single famous sentence, not a chapter.
+
+### The corpus
+
+| ppl | author | ppl | author |
+|---|---|---|---|
+| 15.71 | Anderson | 24.98 | C. Brontë |
+| 17.07 | Christie | 25.28 | Chopin |
+| 19.25 | Wharton | 25.87 | Stevenson |
+| 19.51 | Doyle | 27.03 | Montgomery |
+| 19.98 | Wilde | 29.17 | Fitzgerald |
+| 20.65 | Shelley | 30.32 | E. Brontë |
+| 21.05 | Cather | 30.75 | Eliot |
+| 22.11 | Austen | 31.25 | Conrad |
+| 22.32 | Twain | 31.26 | Dickens |
+| 24.29 | Collins | 35.18 | James |
+| 24.40 | London | 36.87 | Hardy |
+| 24.53 | Wells | 38.74 | Melville |
+| 24.78 | Stoker | | |
+
+**n=25, range 15.71-38.74, mean 25.69, median 24.78.** Against the previous estimate of 19.6-28.6
+from effectively one writer, between-author variation is about twice as wide as assumed. This is
+the parameter the earlier rounds flagged as completely unmeasured, and it was underestimated.
+
+### Consequence: the 12/32 anchors were producing false positives
+
+12/32 put the 0.5 crossover at 19.6. Seven of these 25 real novelists fell below it — Anderson
+scored 73/100 and Christie 64/100 on a signal weighted 0.30. Per the verdict-band decision above,
+false positives on human prose are this tool's more costly error, so the anchors moved.
+
+**Refitted to 6/30**, crossover 13.4, below the human floor of 15.71. No author now exceeds 0.40.
+
+| text | ppl | old (12/32) | new (6/30) |
+|---|---|---|---|
+| llama-3-8b | 5.7 | 100 | 100 |
+| qwen3-14b | 7.2 | 100 | 89 |
+| Anderson (human) | 15.71 | 73 | 40 |
+| Christie (human) | 17.07 | 64 | 35 |
+| Claude Opus 5 | 21.2 | 42 | 22 |
+| Melville (human) | 38.74 | 0 | 0 |
+
+### What this costs, and what it reveals
+
+The signal now only separates models below ~13 perplexity. Everything above that is inside the
+human range and stays there:
+
+- Earlier AI excerpts measured 15.81, 17.66, 19.33. Anderson is 15.71, Christie 17.07, Wharton
+  19.25. **They interleave.** Anderson scores 40 and the 15.81 AI excerpt scores 40 — the same
+  number. No anchor pair separates these populations, because on this measurement they are not
+  separate. The test `the signal does not claim to separate text inside the overlap zone` pins
+  this as a known limitation rather than hiding it.
+- Claude Opus 5 drops from 42 to 22. Frontier sensitivity is essentially gone. That is not a
+  regression introduced by the refit — 21.2 was always inside the human range, and the old
+  anchors only appeared to catch it by also catching seven novelists.
+
+**What perplexity is actually measuring.** The ranking is ordered by prose style, not by
+authorship. The floor is plain modern declarative writing (Anderson 1919, Christie 1920); the
+ceiling is ornate Victorian subordination (Melville, Hardy, James, Dickens). A plain contemporary
+human stylist will score AI-like on this signal no matter who wrote the text. This is the sharpest
+limitation found so far and it is not fixable by recalibration — it is what the measurement is.
+
+### Remaining caveats
+
+Gutenberg is entirely pre-1930, so era is confounded with style throughout; the 12 contemporary
+chapters (19.6-28.6) are the only modern human data and they sit inside the Gutenberg range.
+Still one scoring model, one language, one excerpt per author.
