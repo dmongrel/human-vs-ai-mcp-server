@@ -140,6 +140,27 @@ test("strategic ruleset weights AI stock phrases more heavily than default", asy
   assert.ok(strategicPhrase.weight > defaultPhrase.weight);
 });
 
+test("formatDetectionReport prints a legend giving the direction of the scale", async () => {
+  const formatted = formatDetectionReport(await detectAiUsage(HUMAN_TEXT));
+  assert.match(formatted, /Legend/);
+  assert.match(formatted, /closer to human-written/i);
+  assert.match(formatted, /closer to AI-generated/i);
+});
+
+test("the legend's bands match the verdict thresholds actually applied", async () => {
+  const formatted = formatDetectionReport(await detectAiUsage(HUMAN_TEXT));
+  // Bands are rendered from the same constants the verdict uses, so a
+  // threshold change can't leave the legend lying to the reader.
+  assert.match(formatted, /0-19\s+likely-human/);
+  assert.match(formatted, /20-45\s+uncertain/);
+  assert.match(formatted, /46-100\s+likely-ai-generated/);
+});
+
+test("the signal breakdown restates which direction is more AI-like", async () => {
+  const formatted = formatDetectionReport(await detectAiUsage(HUMAN_TEXT));
+  assert.match(formatted, /Signal breakdown[^\n]*higher = more AI-like/i);
+});
+
 test("formatDetectionReport includes the ruleset used", async () => {
   const report = await detectAiUsage(HUMAN_TEXT, "creative");
   const formatted = formatDetectionReport(report);

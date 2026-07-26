@@ -98,12 +98,21 @@ export function formatDetectionReport(report: DetectionReport): string {
   const lines: string[] = [];
   lines.push(`AI Usage Detection Report`);
   lines.push(`==========================`);
-  lines.push(`Overall AI-likelihood score: ${report.overallScore}/100 (${report.verdict}) — 0 = reads as entirely human-written, 100 = reads as entirely AI-generated.`);
+  lines.push(``);
+  // Rendered from the verdict constants rather than written out by hand, so
+  // changing a threshold can't leave the legend describing bands the tool no
+  // longer applies.
+  lines.push(`Legend — every score below uses one 0-100 scale, in the same direction:`);
+  lines.push(`  0-${LIKELY_HUMAN_BELOW - 1}`.padEnd(10) + `likely-human         ← lower = closer to human-written`);
+  lines.push(`  ${LIKELY_HUMAN_BELOW}-${LIKELY_AI_ABOVE}`.padEnd(10) + `uncertain`);
+  lines.push(`  ${LIKELY_AI_ABOVE + 1}-100`.padEnd(10) + `likely-ai-generated  ← higher = closer to AI-generated`);
+  lines.push(``);
+  lines.push(`Overall AI-likelihood score: ${report.overallScore}/100 (${report.verdict})`);
   lines.push(`Ruleset: ${report.type}${report.type === "default" ? " (no type specified)" : ""}`);
   lines.push(`Markdown ignored (*, _, #): ${report.ignoreMd ? "yes" : "no"}`);
   lines.push(`Word count: ${report.wordCount}, Sentence count: ${report.sentenceCount}`);
   lines.push(``);
-  lines.push(`Signal breakdown (each signal scored 0-100: 0 = strongly human-like on that signal, 100 = strongly AI-like on that signal):`);
+  lines.push(`Signal breakdown (same 0-100 scale: higher = more AI-like on that signal, lower = more human-like):`);
   for (const d of report.detectors) {
     lines.push(`- [${Math.round(d.score * 100)}/100, weight ${d.weight}] ${d.name}`);
     for (const detailLine of d.detail.split("\n")) {
