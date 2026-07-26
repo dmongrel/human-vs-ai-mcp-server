@@ -27,11 +27,13 @@ Signals used (each is its own file under src/lib/detectors/, implementing the sh
 - Markdown-in-prose artifacts: bullet/header/bold markup left in what should be plain prose, a common copy-paste artifact from chat output.
 - Em dash overuse: frequency of the "—" character, a widely reported LLM stylistic tic (notably ChatGPT).
 - N-gram repetition: diversity of 3-word sequences (trigrams); repeated trigrams are a known generation artifact (cf. Holtzman et al., "The Curious Case of Neural Text Degeneration", 2020).
-- Paragraph coherence: cosine similarity between adjacent paragraphs' content-word vectors; unusually high topic overlap paragraph-to-paragraph suggests a single generative pass rather than natural human digression.
+- Paragraph coherence (CURRENTLY DISABLED): cosine similarity between adjacent paragraphs' content-word vectors. The premise — that AI text stays more tightly on-topic — was measured and does not hold for narrative prose, so the signal is switched off rather than reporting a number that means nothing.
 
 Each signal contributes a weighted 0-1 AI-likelihood score; the weighted average becomes an overall 0-100 score with a verdict band: likely-human (<20), uncertain (20-45), likely-ai-generated (>45). Those bands are calibrated against measured scores: human narrative prose lands at 6-8, well-written AI narrative prose at 29-35, and AI text stuffed with stock phrases and markdown at ~50. Well-written AI prose therefore reads as 'uncertain' rather than 'likely-ai-generated' -- on current evidence that is the honest answer.
 
-Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional.
+INPUT LENGTH — this matters for how much to trust the number. Every threshold above was calibrated on ~1,200-word excerpts, so the tool is tuned for chapter-length text (roughly 500-3,000 words). Longer input is accepted and returns a result, but treat it as a rough screen: lexical diversity is a type-token ratio that falls mechanically as a document grows, readability variance saturates across very many paragraphs, and the optional perplexity engine may run out of its time budget before covering the whole text (the report says so when that happens). To analyze a book, run it a chapter at a time — that is both more accurate and tells you which chapter is the problem.
+
+Input: { text? , filePath? , reportPath? , type? , ignoreMd? } — exactly one of text/filePath required; the rest optional. reportPath writes the report to a file instead of returning it inline (e.g. "DETECT-AI.md").
 
 'type' selects a ruleset ("creative" or "strategic") that reweights the signals and adjusts markdown/em-dash saturation thresholds for that genre — see the "Rulesets" section below. Omit it for genre-agnostic default weights.
 

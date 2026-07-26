@@ -182,6 +182,36 @@ narrative prose lands in "uncertain" by design — on this evidence that is the 
 not a threshold to tune away. Tightening further would start producing false positives on human
 prose, which is the more costly error for this tool.
 
+## Decision: document-level, calibrated for chapter-length input
+
+A per-chunk scoring mode was designed — split input into 1,200-word chunks, score each fully,
+roll up by word-weighted mean — and then **deliberately not built**. The tools stay
+document-level.
+
+The tension this leaves open, recorded so it isn't rediscovered later: every constant in the
+repo was measured on ~1,200-word excerpts, and two signals are length-sensitive.
+
+- **Lexical diversity** is a type-token ratio. It falls mechanically as a document grows, so a
+  60,000-word manuscript scores lower than a 1,200-word excerpt by the same author purely
+  because it is longer.
+- **Readability uniformity** compares Flesch variance across paragraphs. Across ~2,000
+  paragraphs that variance saturates and the signal flattens toward 0 regardless of authorship.
+
+Both were observed flat-lining at 0 on the full manuscripts in the benchmark run, while
+scoring normally on 1,200-word excerpts from the same books.
+
+Two ways to resolve it were considered:
+
+1. Re-measure every constant at document length — requires manuscript-length AI text to compare
+   against, which is a substantially bigger sourcing problem than the 1,200-word passages used
+   here.
+2. Leave the constants alone and document the tool as tuned for chapter-length text.
+
+**(2) was chosen.** The scope limit is now stated in README.md ("Input length"), TOOLS.md,
+`src/context.ts` (so the `get_context` tool reports it to callers), and CLAUDE.md. Guidance is
+to analyze a book a chapter at a time — which is also more useful, since it identifies *which*
+chapter is anomalous rather than averaging it away.
+
 ## Note on a bug this exercise caught
 
 The first calibration run reported exactly 511 scored tokens for every ~1,500-token sample. Cause:

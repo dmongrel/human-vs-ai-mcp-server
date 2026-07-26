@@ -95,7 +95,19 @@ See [TOOLS.md](./TOOLS.md) for the maintained tool list with input/output shapes
 - **`humanize_text`** — get actionable recommendations for making AI-leaning text read more naturally human.
 - **`get_context`** — fetch detailed usage documentation for any tool on demand, so the tools' own descriptions can stay short.
 
-Every analysis tool accepts input either as text passed directly (e.g. from an AI source over stdio) or via a local `filePath`, and can return its report inline over stdio or write it to a local file via `reportPath`.
+Every analysis tool accepts input either as text passed directly (e.g. from an AI source over stdio) or via a local `filePath`, and can return its report inline over stdio or write it to a local file via `reportPath` (e.g. `reportPath: "DETECT-AI.md"`).
+
+### Input length: calibrated for chapter-length text
+
+Every threshold in the tool — the verdict bands, the readability anchors, the perplexity anchors — was measured on **~1,200-word excerpts**. Analyze roughly a chapter at a time (500–3,000 words) for the most reliable result.
+
+Longer input is accepted and returns a result, but treat it as a rough screen rather than a measurement, for three reasons:
+
+- **Lexical diversity is a type-token ratio**, which falls mechanically as a document grows. A 60,000-word manuscript scores lower than a 1,200-word excerpt from the same author, purely because it is longer.
+- **Readability uniformity** compares variance across paragraphs. Across two thousand paragraphs that variance saturates, and the signal flattens to 0 regardless of authorship.
+- **The engine may not finish.** Perplexity scoring runs at roughly 90 tokens/second on CPU, so a full manuscript takes ~15 minutes. Whatever `LLAMA_ENGINE_TIMEOUT_MS` allows is what gets scored; the rest of the document is covered by stylometry alone, and the report says so.
+
+Analysing a whole book is therefore best done chapter by chapter, which also tells you *which* chapter is the problem — something a single document-level score cannot.
 
 ---
 
