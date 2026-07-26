@@ -67,20 +67,26 @@ npm install -g human-vs-ai-mcp-server
 
 On Windows x64 this also installs `human-vs-ai-mcp-server-win32-x64`, the prebuilt llama.cpp engine, as an optional dependency — roughly 24 MB, no Go toolchain or compiler needed. Elsewhere npm skips it and the eight stylometric signals work as normal.
 
-**To update, reinstall rather than update:**
+**After installing or updating, check that the engine came with it:**
 
 ```bash
+npm ls -g human-vs-ai-mcp-server-win32-x64
+```
+
+The engine is an *optional* dependency, so if npm cannot resolve it the install still succeeds — silently, with the perplexity signal absent and no error, since the engine client also fails open. Two situations cause that, both observed:
+
+- **Stale registry metadata.** npm caches package metadata for a few minutes, so a version published very recently may not be visible yet and the optional dependency is skipped.
+- **Updating in place.** `npm update -g` and `npm install -g …@latest` over an existing copy have both been seen to bump the main package without installing the matching engine.
+
+If the engine is missing or its version does not match the server's:
+
+```bash
+npm cache clean --force
 npm uninstall -g human-vs-ai-mcp-server
 npm install -g human-vs-ai-mcp-server
 ```
 
-This matters. `npm update -g` (and `npm install -g …@latest` over an existing copy) has been observed to bump the main package while **failing to install the matching engine package** — it removes the old one and never adds the new one. Because optional dependencies and the engine client both fail open, nothing errors: the tool keeps working with the perplexity signal silently missing. A clean reinstall installs both correctly.
-
-To check which engine you have, if any:
-
-```bash
-node -e "console.log(require('human-vs-ai-mcp-server-win32-x64/package.json').version)"
-```
+This is a consequence of shipping the engine as an exact-pinned optional dependency — the same mechanism that makes the install one command on Windows and a clean no-op everywhere else.
 
 ### From source
 

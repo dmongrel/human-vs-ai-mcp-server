@@ -6,8 +6,7 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
-- Update instructions now say to uninstall and reinstall. `npm update -g` bumps the main package without installing the matching engine package, and the loss is silent.
-- Added a one-liner for checking the installed engine version.
+- Documented that the engine can be silently absent after install or update, how to check for it, and how to recover.
 
 ## [0.0.2] - 2026-07-26
 
